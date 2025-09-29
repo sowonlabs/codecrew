@@ -1,7 +1,7 @@
 {
   "name": "codecrew",
-  "version": "0.1.6",
-  "license": "UNLICENSED",
+  "version": "0.1.7",
+  "license": "MIT",
   "description": "CodeCrew: A Model Context Protocol (MCP) server for AI-powered code analysis and multi-agent collaboration",
   "main": "dist/main.js",
   "module": "dist/main.js",
@@ -44,7 +44,7 @@
     "test:ui": "vitest --ui",
     "cli": "npm run build && node dist/main.js --install",
     "cli:log": "npm run build && node dist/main.js --install --log",
-    "prepack": "npm run build && echo '#!/usr/bin/env node' | cat - dist/main.js > temp && mv temp dist/main.js && chmod +x dist/main.js"
+    "prepack": "npm run build && node -e \"const fs = require('fs'); const shebang = '#!/usr/bin/env node\\n'; const content = fs.readFileSync('dist/main.js', 'utf8'); fs.writeFileSync('dist/main.js', shebang + content);\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
