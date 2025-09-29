@@ -1,6 +1,6 @@
 {
-  "name": "@sowonlabs/codecrew",
-  "version": "0.1.4",
+  "name": "codecrew",
+  "version": "0.1.6",
   "license": "UNLICENSED",
   "description": "CodeCrew: A Model Context Protocol (MCP) server for AI-powered code analysis and multi-agent collaboration",
   "main": "dist/main.js",

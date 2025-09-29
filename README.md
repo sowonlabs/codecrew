@@ -25,7 +25,7 @@
 **No installation needed!** Run directly with npx:
 
 ```bash
-npx -y @sowonlabs/codecrew
+npx codecrew
 ```
 
 ## Supported MCP Clients
@@ -33,12 +33,13 @@ npx -y @sowonlabs/codecrew
 ### VS Code MCP Extension
 Add to VS Code MCP configuration (`.vscode/mcp.json`):
 
+**For Windows users (recommended):**
 ```json
 {
   "servers": {
     "codecrew": {
-      "command": "npx",
-      "args": ["-y", "@sowonlabs/codecrew"],
+      "command": "cmd.exe",
+      "args": ["/c", "npx", "codecrew"],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
       }
@@ -46,6 +47,23 @@ Add to VS Code MCP configuration (`.vscode/mcp.json`):
   }
 }
 ```
+
+**For macOS/Linux users:**
+```json
+{
+  "servers": {
+    "codecrew": {
+      "command": "npx",
+      "args": ["codecrew"],
+      "env": {
+        "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+      }
+    }
+  }
+}
+```
+
+> **Note for Windows users:** Due to PowerShell execution policy restrictions, using `cmd.exe` with `npx` provides better compatibility than running `npx` directly in PowerShell.
 
 ### Claude Desktop
 Add to Claude Desktop configuration (`claude_desktop_config.json`):
@@ -55,7 +73,7 @@ Add to Claude Desktop configuration (`claude_desktop_config.json`):
   "mcpServers": {
     "codecrew": {
       "command": "npx",
-      "args": ["-y", "@sowonlabs/codecrew"],
+      "args": ["codecrew"],
       "env": {
         "AGENTS_CONFIG": "/path/to/your/agents.yaml"
       }
@@ -74,7 +92,7 @@ Add to Cursor MCP configuration:
   "mcpServers": {
     "codecrew": {
       "command": "npx",
-      "args": ["-y", "@sowonlabs/codecrew"],
+      "args": ["codecrew"],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
       }
@@ -154,6 +172,68 @@ agents:
       system_prompt: |
         You are a coding assistant specialized in code suggestions and reviews.
 ```
+
+## Troubleshooting
+
+### Windows Issues
+
+**Problem: "'codecrew' is not recognized as an internal or external command"**
+
+**Cause:** PowerShell execution policy restrictions prevent `npx` scripts from running.
+
+**Solutions:**
+
+1. **Use cmd.exe (Recommended)** - Update your MCP configuration:
+   ```json
+   {
+     "servers": {
+       "codecrew": {
+         "command": "cmd.exe",
+         "args": ["/c", "npx", "codecrew"],
+         "env": {
+           "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+         }
+       }
+     }
+   }
+   ```
+
+2. **Alternative: Change PowerShell execution policy** (Admin required):
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+3. **Alternative: Use direct node execution**:
+   ```bash
+   # Install globally first
+   npm install -g codecrew
+   ```
+   Then update MCP config:
+   ```json
+   {
+     "servers": {
+       "codecrew": {
+         "command": "node",
+         "args": ["C:\\Program Files\\nodejs\\node_modules\\codecrew\\dist\\main.js"],
+         "env": {
+           "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+         }
+       }
+     }
+   }
+   ```
+
+### General Issues
+
+**Problem: MCP server fails to start**
+- Ensure `agents.yaml` file exists in your workspace
+- Check that required AI CLI tools are installed and configured
+- Verify your MCP client configuration syntax
+
+**Problem: Agent execution fails**
+- Run `checkAIProviders` tool to verify AI CLI tools are available
+- Check agent configuration in `agents.yaml`
+- Review task logs with `getTaskLogs` tool
 
 ## License
 
