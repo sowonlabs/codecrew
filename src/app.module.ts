@@ -1,0 +1,48 @@
+import { DynamicModule, Module } from '@nestjs/common';
+import { DiscoveryModule } from '@nestjs/core';
+import { McpAdapterModule } from '@sowonai/nestjs-mcp-adapter';
+import { AIService } from './ai.service';
+import { ProjectService } from './project.service';
+import { CodeCrewTool } from './codecrew.tool';
+import { McpController } from './mcp.controller';
+import { CliOptions } from './cli-options';
+import { SERVER_NAME } from './constants';
+import { AIProviderService } from './ai-provider.service';
+import { ClaudeProvider } from './providers/claude.provider';
+import { CopilotProvider } from './providers/copilot.provider';
+import { GeminiProvider } from './providers/gemini.provider';
+
+@Module({})
+export class AppModule {
+  static forRoot(options: CliOptions): DynamicModule {
+    return {
+      module: AppModule,
+      imports: [
+        DiscoveryModule,
+        McpAdapterModule.forRoot({
+          servers: {
+            [SERVER_NAME]: {
+              version: '0.1.0',
+              instructions: 'CodeCrew server: AI-powered code analysis and project exploration tools.',
+            },
+          }
+        }),
+      ],
+      providers: [
+        {
+          provide: 'CLI_OPTIONS',
+          useValue: options,
+        },
+        AIService,
+        ProjectService,
+        CodeCrewTool,
+        AIProviderService,
+        ClaudeProvider,
+        CopilotProvider,
+        GeminiProvider,
+      ],
+      controllers: [McpController],
+      exports: [AIService, ProjectService, CodeCrewTool, AIProviderService],
+    };
+  }
+}

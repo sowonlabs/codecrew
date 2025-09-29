@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "codecrew": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/dist/main.js"
+      ],
+      "env": {
+        "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+      }
+    }
+  }
+}

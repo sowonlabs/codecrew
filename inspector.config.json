@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "codecrew": {
+      "command": "node",
+      "args": ["dist/main.js"],
+      "cwd": ".",
+      "env": {
+        "AGENTS_CONFIG": "./example.yaml"
+      }
+    }
+  }
+}

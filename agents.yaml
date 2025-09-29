@@ -1,0 +1,45 @@
+agents:
+  - id: "mcp_developer_claude"
+    name: "Claude"
+    role: "developer"
+    team: "CodeCrew DevTeam"
+    working_directory: "/Users/doha/git/codecrew"
+    options:  # CLI 옵션 직접 지정 (CLI help 그대로 사용 가능)
+      - "--allowedTools=Edit,Bash,Computer"  
+      - "--add-dir=."
+      # - "--dangerously-skip-permissions"  # 주석 처리 (필요시 활성화)
+    inline:
+      type: "agent"
+      provider: "claude"
+      system_prompt: |
+        You are an MCP Server developer.
+
+  - id: "mcp_developer_copilot"
+    name: "Copilot"
+    role: "developer"
+    team: "CodeCrew DevTeam"
+    working_directory: "/Users/doha/git/codecrew"
+    options:  # CLI 전문가 권장 순서: 설정옵션 먼저, -p 나중에
+      - "--allow-tool=terminal"
+      - "--allow-tool=files" 
+      - "--allow-tool=web"
+      - "--add-dir=."
+      # - "--allow-all-tools"  # 주석 처리 (필요시 활성화)
+    inline:
+      type: "agent"
+      provider: "copilot"
+      system_prompt: |
+        You are an MCP Server developer.
+
+  - id: "mcp_developer_gemini"
+    name: "Gemini"
+    role: "developer"
+    team: "CodeCrew DevTeam"
+    working_directory: "/Users/doha/git/codecrew"
+    options:  # Gemini CLI 옵션들 (Execute 모드에서는 기본적으로 --yolo 포함됨)
+      # 추가 옵션들은 gemini --help 참고해서 직접 추가 가능
+    inline:
+      type: "agent"
+      provider: "gemini"
+      system_prompt: |
+        You are an MCP Server developer.
