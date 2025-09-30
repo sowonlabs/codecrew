@@ -5,13 +5,20 @@ import * as path from 'path';
 // Task log interface
 export interface TaskLog {
   id: string;
-  type: 'query' | 'execute';
+  type: 'query' | 'execute' | 'init' | 'doctor';
   agentId?: string;
-  provider: 'claude' | 'gemini' | 'copilot';
+  provider?: 'claude' | 'gemini' | 'copilot';
   startTime: Date;
   endTime?: Date;
   status: 'running' | 'completed' | 'failed';
-  prompt: string;
+  duration?: number; // in milliseconds
+  memoryUsage?: {
+    start: number; // in bytes
+    end: number; // in bytes
+  };
+  prompt?: string;
+  command?: string;
+  options?: any;
   result?: any;
   logs: Array<{
     timestamp: Date;
@@ -22,9 +29,11 @@ export interface TaskLog {
 
 // Task creation options
 export interface TaskCreationOptions {
-  type: 'query' | 'execute';
-  provider: 'claude' | 'gemini' | 'copilot';
-  prompt: string;
+  type: 'query' | 'execute' | 'init' | 'doctor';
+  provider?: 'claude' | 'gemini' | 'copilot';
+  prompt?: string;
+  command?: string;
+  options?: any;
   agentId?: string;
 }
 
@@ -60,7 +69,11 @@ export class TaskManagementService {
       startTime: new Date(),
       status: 'running',
       prompt: options.prompt,
-      logs: []
+      logs: [],
+      memoryUsage: {
+        start: process.memoryUsage().heapUsed,
+        end: 0,
+      },
     };
 
     this.taskLogs.set(taskId, task);
@@ -104,11 +117,15 @@ export class TaskManagementService {
       task.endTime = new Date();
       task.status = success ? 'completed' : 'failed';
       task.result = result;
-      
+      task.duration = task.endTime.getTime() - task.startTime.getTime();
+      if (task.memoryUsage) {
+        task.memoryUsage.end = process.memoryUsage().heapUsed;
+      }
+
       // Update log file with completion info
       this.updateLogFileWithCompletion(taskId, task, success);
       
-      const duration = task.endTime.getTime() - task.startTime.getTime();
+      const duration = task.duration;
       this.logger.log(`Task ${taskId} ${success ? 'completed' : 'failed'} in ${duration}ms`);
     } else {
       this.logger.warn(`Attempted to complete non-existent task: ${taskId}`);
@@ -221,7 +238,9 @@ export class TaskManagementService {
 
     // Count by provider
     allTasks.forEach(task => {
-      stats.byProvider[task.provider] = (stats.byProvider[task.provider] || 0) + 1;
+      if (task.provider) {
+        stats.byProvider[task.provider] = (stats.byProvider[task.provider] || 0) + 1;
+      }
       stats.byType[task.type] = (stats.byType[task.type] || 0) + 1;
     });
 

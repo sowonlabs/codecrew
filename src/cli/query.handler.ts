@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { CliOptions } from '../cli-options';
 import { CodeCrewTool } from '../codecrew.tool';
+import { readStdin, formatPipedContext } from '../utils/stdin-utils';
 
 const logger = new Logger('QueryHandler');
 
@@ -41,12 +42,22 @@ export async function handleQuery(app: any, args: CliOptions) {
       process.exit(1);
     }
 
-    // 2. Get CodeCrewTool from app context
-    const codeCrewTool = app.get(CodeCrewTool);    console.log(`📋 Task: ${taskText}`);
+    // 2. Check for piped input (stdin) and convert to context
+    const pipedInput = await readStdin();
+    const contextFromPipe = pipedInput ? formatPipedContext(pipedInput) : undefined;
+    
+    if (pipedInput) {
+      console.log('📥 Received piped input - using as context');
+    }
+
+    // 3. Get CodeCrewTool from app context
+    const codeCrewTool = app.get(CodeCrewTool);
+
+    console.log(`📋 Task: ${taskText}`);
     console.log(`🤖 Agents: ${mentions.map(m => `@${m}`).join(' ')}`);
     console.log('');
 
-    // 3. Call appropriate method based on number of agents
+    // 4. Call appropriate method based on number of agents
     let result;
     if (mentions.length === 1) {
       // Single agent query
@@ -56,10 +67,11 @@ export async function handleQuery(app: any, args: CliOptions) {
 
       result = await codeCrewTool.queryAgent({
         agentId: agentId,
-        query: taskText
+        query: taskText,
+        context: contextFromPipe
       });
 
-      // 4. Format and output results for single agent
+      // 5. Format and output results for single agent
       if (agentId && taskText) {
         formatSingleAgentResult(result, agentId, taskText);
       }
@@ -74,12 +86,13 @@ export async function handleQuery(app: any, args: CliOptions) {
 
       const queries = mentions.map(agentId => ({
         agentId: agentId,
-        query: taskText
+        query: taskText,
+        context: contextFromPipe
       }));
 
       result = await codeCrewTool.queryAgentParallel({ queries });
 
-      // 4. Format and output results for parallel agents
+      // 5. Format and output results for parallel agents
       const validMentions = mentions.filter((m): m is string => !!m);
       if (taskText) {
         formatParallelAgentResults(result, validMentions, taskText);

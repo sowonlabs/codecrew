@@ -6,7 +6,7 @@ export class GeminiProvider extends BaseAIProvider {
   readonly name = 'gemini' as const;
 
   constructor() {
-    super(GeminiProvider.name);
+    super('GeminiProvider');
   }
 
   protected getCliCommand(): string {

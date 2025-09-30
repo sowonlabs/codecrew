@@ -61,7 +61,7 @@ describe('CodeCrew MCP server integration test', () => {
       env: {
         ...process.env,
         'AGENTS_CONFIG': './example.yaml',
-        'PATH': process.env.PATH || '', // 명시적으로 PATH 설정
+        'PATH': process.env.PATH || '', // Explicitly set PATH
       }
     });
     
@@ -121,7 +121,7 @@ describe('CodeCrew MCP server integration test', () => {
       tool.name === 'codecrew_listAgents'
     );
     expect(listAgentsTool).toBeDefined();
-    expect(listAgentsTool?.description).toContain('전문가 에이전트 목록');
+    expect(listAgentsTool?.description).toContain('list of expert agents');
   }, MINUTE);
 
   it('listAgents tool test - external YAML config loading', async () => {
@@ -205,7 +205,7 @@ describe('CodeCrew MCP server integration test', () => {
         name: 'codecrew_analyzeProject',
         arguments: {
           projectPath: path.resolve(__dirname, '..'),
-          query: '이 프로젝트는 어떤 기술을 사용하는 NestJS 프로젝트인가요?',
+          query: 'What technologies does this NestJS project use?',
           provider: 'claude',
           maxDepth: 2
         }
@@ -276,7 +276,7 @@ describe('CodeCrew MCP server integration test', () => {
         name: 'codecrew_queryAgent',
         arguments: {
           agentId: 'gmail_mcp_developer',
-          query: 'README.md 파일을 분석해줘',
+          query: 'Analyze the README.md file',
           context: 'Testing MCP server functionality'
         }
       }

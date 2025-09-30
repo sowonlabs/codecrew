@@ -53,9 +53,15 @@ export abstract class BaseAIProvider implements AIProvider {
   /**
    * Parse provider-specific error messages to provide better user feedback
    */
-  protected parseProviderError(stderr: string, stdout: string): string {
-    // Default implementation returns stderr as-is
-    return stderr;
+  public parseProviderError(
+    stderr: string,
+    stdout: string,
+  ): { error: boolean; message: string } {
+    // Default implementation: return error if stderr is not empty.
+    if (stderr) {
+      return { error: true, message: stderr };
+    }
+    return { error: false, message: '' };
   }
 
   async getToolPath(): Promise<string | null> {
@@ -189,15 +195,18 @@ Started: ${timestamp}
             this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
 
-          if (code !== 0) {
-            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed with exit code ${code}`);
-            const parsedError = this.parseProviderError(stderr, stdout);
+          // Handle failure if exit code is non-zero or provider detects an error
+          const providerError = this.parseProviderError(stderr, stdout);
+          if (code !== 0 || providerError.error) {
+            const errorMessage = providerError.message || stderr || `Exit code ${code}`;
+            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed: ${errorMessage}`);
+            this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
             resolve({
               content: '',
               provider: this.name,
               command,
               success: false,
-              error: `${this.name} CLI failed: ${parsedError || `Exit code ${code}`}`,
+              error: `${this.name} CLI failed: ${errorMessage}`,
               taskId,
             });
             return;
@@ -339,15 +348,18 @@ Started: ${timestamp}
             this.logger.warn(`[${taskId}] ${this.name} execute stderr: ${stderr}`);
           }
 
-          if (code !== 0) {
-            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI execute failed with exit code ${code}`);
-            const parsedError = this.parseProviderError(stderr, stdout);
+          // Handle failure if exit code is non-zero or provider detects an error
+          const providerError = this.parseProviderError(stderr, stdout);
+          if (code !== 0 || providerError.error) {
+            const errorMessage = providerError.message || stderr || `Exit code ${code}`;
+            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI execute failed: ${errorMessage}`);
+            this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
             resolve({
               content: '',
               provider: this.name,
               command,
               success: false,
-              error: `${this.name} CLI execute failed: ${parsedError || `Exit code ${code}`}`,
+              error: `${this.name} CLI execute failed: ${errorMessage}`,
               taskId,
             });
             return;

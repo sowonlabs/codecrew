@@ -6,12 +6,36 @@ export interface AgentConfig {
     provider: 'claude' | 'gemini' | 'copilot';
     system_prompt: string;
   };
+  
+  // Legacy single options array (for backward compatibility)
+  // options?: string[];
+  
+  // New, simpler mode-specific options structure
+  options?: {
+    query?: string[];    // Read-only analysis mode
+    execute?: string[];  // File modification/execution mode
+  };
+  
   tools?: string[]; // Available tools
   capabilities?: {
     autonomous_work?: boolean; // Whether autonomous work is possible
     file_operations?: boolean; // File manipulation permissions
     tool_access?: string[]; // List of accessible tools
   };
+}
+
+// Security Level Enum
+export enum SecurityLevel {
+  SAFE = 'safe',           // Fully safe options
+  MODERATE = 'moderate',   // Options that require caution
+  DANGEROUS = 'dangerous', // Dangerous options
+  CRITICAL = 'critical'    // Critical options
+}
+
+// Execution Mode Enum
+export enum ExecutionMode {
+  QUERY = 'query',     // Read-only analysis
+  EXECUTE = 'execute'  // File modification/execution
 }
 
 export interface AgentsConfig {
@@ -23,6 +47,9 @@ export interface AgentQueryOptions {
   context?: string; // Additional context
   timeout?: number;
   readOnlyMode?: boolean; // Read-only mode (no modification operations)
+  executionMode?: ExecutionMode; // Specify execution mode
+  securityLevel?: SecurityLevel; // Specify security level
+  additionalArgs?: string[]; // Additional CLI arguments
 }
 
 export interface AgentResponse {
@@ -55,5 +82,8 @@ export interface AgentInfo {
   description: string;
   specialties?: string[];
   systemPrompt?: string;
-  options?: string[]; // Flexible CLI options array (e.g., ["--allowedTools=Edit,Bash", "--add-dir=."])
+  options?: string[] | {
+    query?: string[];    // Read-only analysis mode options
+    execute?: string[];  // File modification/execution mode options
+  }; // Flexible CLI options - legacy array or new mode-specific object
 }

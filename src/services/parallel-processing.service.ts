@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIService } from '../ai.service';
 import { TaskManagementService } from './task-management.service';
+import { ConfigService } from './config.service';
 
 // Result interface for individual agent executions
 interface AgentExecutionResult {
@@ -34,8 +35,41 @@ export class ParallelProcessingService {
 
   constructor(
     private readonly aiService: AIService,
-    private readonly taskManagementService: TaskManagementService
+    private readonly taskManagementService: TaskManagementService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Get the actual AI provider for a given agent ID
+   */
+  private getProviderForAgent(agentId: string): 'claude' | 'gemini' | 'copilot' {
+    // Direct provider names
+    if (agentId === 'claude' || agentId === 'gemini' || agentId === 'copilot') {
+      return agentId as 'claude' | 'gemini' | 'copilot';
+    }
+
+    const agentConfig = this.configService.getAgentConfig(agentId);
+    if (agentConfig && agentConfig.inline?.provider) {
+      return agentConfig.inline.provider;
+    }
+
+    // Default to claude if no specific configuration found
+    this.logger.warn(`No provider found for agent ${agentId}, defaulting to claude`);
+    return 'claude';
+  }
+
+  /**
+   * Get mode-specific options for a given agent ID and execution mode
+   */
+  private getOptionsForAgent(agentId: string, mode: 'query' | 'execute'): string[] {
+    const agentConfig = this.configService.getAgentConfig(agentId);
+    if (agentConfig && agentConfig.options) {
+      if (typeof agentConfig.options === 'object' && agentConfig.options[mode]) {
+        return agentConfig.options[mode] || [];
+      }
+    }
+    return [];
+  }
 
   /**
    * Execute multiple agent queries/tasks in parallel
@@ -204,21 +238,28 @@ export class ParallelProcessingService {
   ): Promise<AgentExecutionResult> {
     const startTime = performance.now();
 
+    // Get the actual AI provider for this agent
+    const actualProvider = this.getProviderForAgent(request.agentId);
+
     // Create task using TaskManagementService
     const taskId = this.taskManagementService.createTask({
       type: request.query ? 'query' : 'execute',
-      provider: request.agentId as 'claude' | 'gemini' | 'copilot',
+      provider: actualProvider,
       prompt: request.query || request.task || '',
       agentId: request.agentId
     });
 
     try {
-      this.logger.log(`Starting execution for agent: ${request.agentId} (taskId: ${taskId})`);
+      // Get mode-specific options for this agent
+      const mode = request.query ? 'query' : 'execute';
+      const agentOptions = this.getOptionsForAgent(request.agentId, mode);
+      
+      this.logger.log(`Starting execution for agent: ${request.agentId} (provider: ${actualProvider}, mode: ${mode}, options: ${agentOptions.join(' ')}, taskId: ${taskId})`);
 
       // Log task start
       this.taskManagementService.addTaskLog(taskId, {
         level: 'info',
-        message: `Starting ${request.query ? 'query' : 'execute'} operation`
+        message: `Starting ${mode} operation with options: ${agentOptions.join(' ')}`
       });
 
       // Create timeout promise
@@ -237,10 +278,11 @@ export class ParallelProcessingService {
           
         resultPromise = this.aiService.queryAI(
           finalQuery,
-          request.agentId as 'claude' | 'gemini' | 'copilot',
+          actualProvider,
           {
             workingDirectory: request.projectPath,
             taskId, // Pass taskId to AIService
+            additionalArgs: agentOptions, // Pass mode-specific options
           }
         );
       } else if (request.task) {
@@ -251,10 +293,11 @@ export class ParallelProcessingService {
           
         resultPromise = this.aiService.executeAI(
           finalTask,
-          request.agentId as 'claude' | 'gemini' | 'copilot',
+          actualProvider,
           {
             workingDirectory: request.projectPath,
             taskId, // Pass taskId to AIService
+            additionalArgs: agentOptions, // Pass mode-specific options
           }
         );
       } else {

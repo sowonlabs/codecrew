@@ -415,11 +415,14 @@ Query: ${query}`;
       let response;
       const provider = agent.provider || 'claude';
       
+      // Get mode-specific options for this agent (query mode)
+      const agentOptions = this.getOptionsForAgent(agent, 'query');
+      
       response = await this.aiService.queryAI(fullPrompt, provider, {
         workingDirectory: workingDir,
         timeout: 600000,
-        taskId: taskId,
-        additionalArgs: agent.options, // Pass agent-specific CLI options
+        additionalArgs: agentOptions, // Pass mode-specific options
+        taskId, // Pass taskId to AIService
       });
 
       // Handle task completion
@@ -581,12 +584,15 @@ Please provide detailed, actionable implementation guidance including:
       const provider = agent.provider || 'claude';
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using provider: ${provider}` });
       
+      // Get mode-specific options for this agent (execute mode)
+      const agentOptions = this.getOptionsForAgent(agent, 'execute');
+      
       // Use new unified executeAI for all providers
       response = await this.aiService.executeAI(fullPrompt, provider, {
         workingDirectory: workingDir,
         timeout: provider === 'gemini' ? 1200000 : 600000, // 20min for Gemini, 10min for others
         taskId: taskId,
-        additionalArgs: agent.options, // Pass agent-specific CLI options
+        additionalArgs: agentOptions, // Pass mode-specific options
       });
 
       // Handle task completion
@@ -666,20 +672,41 @@ Execution Mode: Implementation guidance could not be provided.`
   }
 
   /**
+   * Get mode-specific options for a given agent and execution mode
+   */
+  private getOptionsForAgent(agent: AgentInfo, mode: 'query' | 'execute'): string[] {
+    try {
+      // Handle new structure: agent.options.query / agent.options.execute
+      if (agent.options && typeof agent.options === 'object' && !Array.isArray(agent.options)) {
+        const modeOptions = (agent.options as any)[mode];
+        return modeOptions || [];
+      }
+      
+      // Handle legacy structure: agent.options array (for backward compatibility)
+      if (agent.options && Array.isArray(agent.options)) {
+        return agent.options;
+      }
+      
+      return [];
+    } catch (error) {
+      this.logger.warn(`Failed to get options for agent ${agent.id}: ${error}`);
+      return [];
+    }
+  }
+
+  /**
    * Load available agents list (internal helper method)
    */
   private async loadAvailableAgents(): Promise<AgentInfo[]> {
     try {
-      // Check agent configuration file path from environment variable
-      const agentsConfigPath = process.env.AGENTS_CONFIG;
+      // Check agent configuration file path from environment variable or default
+      const agentsConfigPath = process.env.AGENTS_CONFIG || 'agents.yaml';
       
       let agents: AgentInfo[] = [];
       
-      // Try to load from config file if path is specified
-      if (agentsConfigPath) {
-        this.logger.log(`Loading agents from external config: ${agentsConfigPath}`);
-        agents = await this.loadAgentsFromConfig(agentsConfigPath);
-      }
+      // Try to load from config file (environment or default agents.yaml)
+      this.logger.log(`Loading agents from config: ${agentsConfigPath}`);
+      agents = await this.loadAgentsFromConfig(agentsConfigPath);
       
       // Always add default CLI agents (@claude, @gemini, @copilot)
       const defaultCliAgents: AgentInfo[] = [
