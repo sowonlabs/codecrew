@@ -6,7 +6,7 @@ export class ClaudeProvider extends BaseAIProvider {
   readonly name = 'claude' as const;
 
   constructor() {
-    super(ClaudeProvider.name);
+    super('ClaudeProvider');
   }
 
   protected getCliCommand(): string {
@@ -26,28 +26,41 @@ export class ClaudeProvider extends BaseAIProvider {
     return 'Claude CLI is not installed. Please install it from https://claude.ai/download.';
   }
 
-  protected parseProviderError(stderr: string, stdout: string): string {
+  public parseProviderError(
+    stderr: string,
+    stdout: string,
+  ): { error: boolean; message: string } {
     const errorMessage = stderr || stdout;
-    
-    // Check for session limit error
+
     if (errorMessage.includes('Session limit reached')) {
       const resetMatch = errorMessage.match(/resets (\d+(?::\d+)?(?:am|pm))/i);
       const resetTime = resetMatch ? resetMatch[1] : 'later today';
-      
-      return `Claude Pro session limit reached. Your limit will reset at ${resetTime}. Please try again after the reset or use another AI agent (Gemini or Copilot) in the meantime.`;
+      return {
+        error: true,
+        message: `Claude Pro session limit reached. Your limit will reset at ${resetTime}. Please try again after the reset or use another AI agent (Gemini or Copilot) in the meantime.`,
+      };
     }
-    
-    // Check for authentication errors
+
     if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-      return 'Claude CLI authentication required. Please run `claude login` to authenticate.';
+      return {
+        error: true,
+        message:
+          'Claude CLI authentication required. Please run `claude login` to authenticate.',
+      };
     }
-    
-    // Check for network errors
+
     if (errorMessage.includes('network') || errorMessage.includes('connection')) {
-      return 'Network connection error. Please check your internet connection and try again.';
+      return {
+        error: true,
+        message:
+          'Network connection error. Please check your internet connection and try again.',
+      };
     }
-    
-    // Default to original error message
-    return errorMessage;
+
+    if (stderr && !stdout) {
+      return { error: true, message: stderr };
+    }
+
+    return { error: false, message: '' };
   }
 }

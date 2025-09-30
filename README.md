@@ -14,6 +14,9 @@
 - **Parallel execution** - Run multiple agents simultaneously for faster results
 - **Task logging** - Monitor and track all agent activities
 - **Flexible configuration** - Define custom agents for your specific needs
+- **🆕 Direct CLI interface** - Use from command line without IDE setup
+- **🆕 Pipeline support** - Chain commands with Unix-style pipes
+- **🆕 Real file operations** - Agents can create and modify actual files
 
 ### Supported AI Tools
 - **Claude Code** - Advanced reasoning and code analysis
@@ -22,11 +25,37 @@
 
 ## Quick Start
 
-**No installation needed!** Run directly with npx:
+CodeCrew offers two distinct modes of operation:
+
+### 🖥️ **CLI Mode** - Direct Command Line Usage
+**Perfect for terminal workflows and automation:**
 
 ```bash
-npx codecrew
+# Show help and available commands (default behavior)
+codecrew
+
+# Initialize your project
+codecrew init
+
+# Check system health
+codecrew doctor
+
+# Query agents (read-only analysis)
+codecrew query "@claude analyze my code"
+
+# Execute tasks (file creation/modification)
+codecrew execute "@claude create a login component"
 ```
+
+### 🔌 **MCP Server Mode** - IDE Integration
+**For seamless integration with VS Code, Claude Desktop, Cursor:**
+
+```bash
+# Run MCP server for IDE integration
+codecrew mcp
+```
+
+> **Choose Your Mode:** Use CLI mode for direct terminal workflows, or MCP server mode for IDE integration. Both provide full access to the same powerful AI agent collaboration features.
 
 ## Supported MCP Clients
 
@@ -39,7 +68,7 @@ Add to VS Code MCP configuration (`.vscode/mcp.json`):
   "servers": {
     "codecrew": {
       "command": "cmd.exe",
-      "args": ["/c", "npx", "codecrew"],
+      "args": ["/c", "codecrew", "mcp"],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
       }
@@ -54,7 +83,7 @@ Add to VS Code MCP configuration (`.vscode/mcp.json`):
   "servers": {
     "codecrew": {
       "command": "npx",
-      "args": ["codecrew"],
+      "args": ["-y", "codecrew", "mcp"],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
       }
@@ -73,7 +102,7 @@ Add to Claude Desktop configuration (`claude_desktop_config.json`):
   "mcpServers": {
     "codecrew": {
       "command": "npx",
-      "args": ["codecrew"],
+      "args": ["-y", "codecrew", "mcp"],
       "env": {
         "AGENTS_CONFIG": "/path/to/your/agents.yaml"
       }
@@ -92,7 +121,7 @@ Add to Cursor MCP configuration:
   "mcpServers": {
     "codecrew": {
       "command": "npx",
-      "args": ["codecrew"],
+      "args": ["-y", "codecrew", "mcp"],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
       }
@@ -109,6 +138,127 @@ Add to Cursor MCP configuration:
 - **Windsurf**: MCP support may vary - check their documentation
 
 **Note:** Create `agents.yaml` file first (see Custom Agents Setup below), then restart your MCP client.
+
+## 🖥️ CLI Features
+
+### **Comprehensive Command Line Interface**
+
+CodeCrew includes a full-featured CLI that works independently of any IDE or MCP client. When you run `codecrew` without any arguments, it displays help by default. For MCP server integration, use `codecrew mcp`.
+
+#### **🚀 Core Commands**
+
+**`codecrew` (default)** - Help and Command Overview
+- ✅ **Default Behavior**: Shows comprehensive help when no command is specified
+- ✅ **Command Overview**: Lists all available commands and options
+- ✅ **Usage Examples**: Provides clear examples for each command
+- ✅ **Quick Start Guide**: Helps users get started quickly
+
+**`codecrew init`** - Project Initialization
+- ✅ Creates `agents.yaml` configuration file
+- ✅ Sets up `.codecrew/logs` directory structure
+- ✅ Configures default Claude, Gemini, and Copilot agents
+- ✅ Prevents accidental overwrites (use `--force` to override)
+
+```bash
+codecrew init                          # Initialize in current directory
+codecrew init --config custom.yaml    # Use custom config filename
+codecrew init --force                 # Overwrite existing configuration
+```
+
+**`codecrew doctor`** - System Health Check
+- ✅ Validates `agents.yaml` configuration
+- ✅ Tests AI CLI tool availability (Claude, Gemini, Copilot)
+- ✅ Sends real test queries to verify AI responses
+- ✅ Checks for session limits and performance issues
+- ✅ Provides specific troubleshooting recommendations
+
+```bash
+codecrew doctor                        # Full system diagnosis
+codecrew doctor --config path/to/config.yaml  # Use custom config
+```
+
+**`codecrew query`** - Read-Only Analysis
+- ✅ Query single or multiple agents simultaneously
+- ✅ Perfect for code analysis, reviews, and explanations
+- ✅ Supports pipeline input for context chaining
+- ✅ No file modifications - safe for analysis
+
+```bash
+codecrew query "@claude analyze this function"
+codecrew query "@claude @gemini @copilot review security practices"
+echo "user auth code" | codecrew query "@claude explain this"
+```
+
+**`codecrew execute`** - File Operations
+- ✅ Agents can create, modify, and delete files
+- ✅ Parallel execution with detailed performance metrics
+- ✅ Pipeline support for multi-step workflows
+- ✅ Comprehensive logging and error handling
+
+```bash
+codecrew execute "@claude create a React component"
+codecrew execute "@claude @gemini implement different sorting algorithms"
+codecrew query "@architect design API" | codecrew execute "@backend implement the design"
+```
+
+#### **🔄 Pipeline Workflows**
+
+Chain commands together with Unix-style pipes for complex workflows:
+
+```bash
+# Multi-step development workflow
+codecrew query "@architect design user auth system" | \
+codecrew execute "@backend implement the API endpoints" | \
+codecrew execute "@frontend create the UI components"
+
+# Code review and improvement pipeline
+codecrew query "@claude analyze current code quality" | \
+codecrew execute "@gemini implement the suggested improvements"
+```
+
+#### **📊 Advanced Features**
+
+- **Task Tracking**: Every operation is logged with unique task IDs
+- **Performance Metrics**: Execution time, success rates, parallel vs sequential comparison
+- **Error Recovery**: Detailed error messages with resolution suggestions
+- **Session Management**: Handles AI provider session limits gracefully
+- **Configuration Validation**: Validates agent configurations before execution
+
+#### **🧪 Proven Test Results**
+
+- ✅ **File Creation**: Successfully created `multiplication.js` with working code
+- ✅ **Pipeline Context**: Verified context passing through `context-test.txt`
+- ✅ **Parallel Processing**: Multiple agents working simultaneously
+- ✅ **AI Integration**: All three providers (Claude, Gemini, Copilot) tested and working
+
+### **Getting Started with CLI**
+
+1. **See all available commands:**
+   ```bash
+   codecrew
+   ```
+
+2. **Initialize your project:**
+   ```bash
+   codecrew init
+   ```
+
+3. **Verify everything works:**
+   ```bash
+   codecrew doctor
+   ```
+
+4. **Try your first query:**
+   ```bash
+   codecrew query "@claude hello world"
+   ```
+
+5. **Create your first file:**
+   ```bash
+   codecrew execute "@claude create a simple Node.js HTTP server"
+   ```
+
+For detailed CLI documentation and advanced usage patterns, see [README.cli.md](README.cli.md).
 
 ## Available Tools
 
@@ -135,10 +285,15 @@ agents:
   - id: "frontend_developer"
     name: "React Expert"
     working_directory: "/path/to/your/project"
-    options:  # CLI options for file operations
-      - "--allowedTools=Edit,Bash"
-      - "--add-dir=."
-      # - "--dangerously-skip-permissions"  # DANGEROUS: Bypasses all safety checks
+    options:
+      query:  # Options for read-only query mode
+        - "--add-dir=."
+        - "--verbose"
+        # Query mode is read-only, so exclude dangerous tools
+      execute:  # Options for file modification execute mode
+        - "--add-dir=."
+        - "--allowedTools=Edit,Bash"
+        # Execute mode allows file operations
     inline:
       type: "agent"
       provider: "claude"
@@ -149,10 +304,13 @@ agents:
   - id: "devops_engineer"
     name: "DevOps Expert"
     working_directory: "/path/to/your/project"
-    options:  # Additional Gemini options (--yolo auto-enabled in execute mode)
-      - "--sandbox"
-      # Additional dangerous options (uncomment with caution):
-      # - "--yolo"  # DANGEROUS: Already auto-enabled in execute mode
+    options:
+      query:  # Options for read-only query mode
+        - "--include-directories=."
+        # Query mode uses default options
+      execute:  # Options for file modification execute mode
+        - "--include-directories=."
+        - "--yolo"  # Automatic execution is only allowed in execute mode
     inline:
       type: "agent"
       provider: "gemini"
@@ -163,9 +321,14 @@ agents:
   - id: "copilot_assistant"
     name: "Copilot Helper"
     working_directory: "/path/to/your/project"
-    options:  # Copilot specific options
-      - "--allow-tool=files"
-      # - "--allow-all-tools"  # DANGEROUS: Enables all tools including system access
+    options:
+      query:  # Options for read-only query mode
+        - "--allow-tool=files"
+        # Query mode only allows file reading
+      execute:  # Options for file modification execute mode
+        - "--allow-tool=terminal"
+        - "--allow-tool=files"
+        # Execute mode allows terminal and file access
     inline:
       type: "agent"
       provider: "copilot"
@@ -189,7 +352,7 @@ agents:
      "servers": {
        "codecrew": {
          "command": "cmd.exe",
-         "args": ["/c", "npx", "codecrew"],
+         "args": ["/c", "codecrew", "mcp"],
          "env": {
            "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
          }

@@ -702,7 +702,7 @@ Started: ${timestamp}
   }
 
   async checkAvailableProviders(): Promise<string[]> {
-    return this.aiProviderService.getAvailableProviders();
+    return this.aiProviderService.checkAvailableProviders();
   }
 
   async validateCLIInstallation(): Promise<{ claude: boolean; gemini: boolean; copilot: boolean }> {

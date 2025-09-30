@@ -33,6 +33,9 @@ export function parseCliOptions(): CliOptions {
       });
     })
     .command('doctor', 'Check AI provider status', () => {})
+    .command('init', 'Initialize CodeCrew project', () => {})
+    .command('mcp', 'Start MCP server for IDE integration', () => {})
+    .command('help', 'Show help', () => {})
     .option('install', {
       type: 'boolean',
       default: false,
@@ -72,6 +75,7 @@ export function parseCliOptions(): CliOptions {
     })
     // API key options removed for security
     // Use environment variables or CLI tool authentication instead
+    .help(false)
     .parseSync();
 
   return {
