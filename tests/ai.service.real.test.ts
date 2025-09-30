@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AIService } from '../src/ai.service';
 
-// 실제 child_process 모듈을 사용하도록 설정
+// Configure to use the actual child_process module
 vi.mock('child_process', async () => {
   const actual = await vi.importActual('child_process');
   return actual;
@@ -14,7 +14,7 @@ describe('AIService - Real CLI Integration Tests', () => {
   let service: AIService;
 
   beforeEach(async () => {
-    // 필요한 의존성들을 모두 import
+    // Import all necessary dependencies
     const { AIProviderService } = await import('../src/ai-provider.service');
     const { ClaudeProvider } = await import('../src/providers/claude.provider');
     const { CopilotProvider } = await import('../src/providers/copilot.provider');
@@ -34,7 +34,7 @@ describe('AIService - Real CLI Integration Tests', () => {
 
     service = module.get<AIService>(AIService);
     
-    // AIProviderService 초기화
+    // Initialize AIProviderService
     const aiProviderService = module.get(AIProviderService);
     await aiProviderService.initializeProviders();
   });
@@ -58,7 +58,7 @@ describe('AIService - Real CLI Integration Tests', () => {
     }, 60000); // 60 second timeout
 
     it('should execute claude CLI with Korean prompt', async () => {
-      const result = await service.queryClaudeCLI('안녕하세요! 간단한 한글 테스트입니다. "테스트 성공"이라고 답변해주세요.');
+      const result = await service.queryClaudeCLI('Hello! This is a simple Korean test. Please respond with "Test Success".');
 
       console.log('Claude Korean Response:', result);
 
@@ -123,7 +123,7 @@ function add(a: number, b: number): number {
         console.log('✅ Gemini CLI working!');
       } else {
         console.log('❌ Gemini CLI failed (expected if not installed):', result.error);
-        // 설치되지 않은 경우는 정상적인 실패
+        // Failure is expected if not installed
         expect(result.error).toBeTruthy();
       }
     }, 60000);
@@ -141,7 +141,7 @@ function add(a: number, b: number): number {
         console.log('✅ Copilot CLI working!');
       } else {
         console.log('❌ Copilot CLI failed (expected if not installed):', result.error);
-        // 설치되지 않은 경우는 정상적인 실패
+        // Failure is expected if not installed
         expect(result.error).toBeTruthy();
       }
     }, 60000);
@@ -184,7 +184,7 @@ function add(a: number, b: number): number {
     }, 10 * MINUTES);
 
     it('should route to gemini and handle execute', async () => {
-      const result = await service.queryGeminiCLI('README.md 파일을 분석해서 이 프로젝트가 무슨 프로젝트인지 알려줘.', {
+      const result = await service.queryGeminiCLI('Analyze the README.md file and tell me what this project is about.', {
           workingDirectory: '/Users/doha/git/mcp-servers/packages/gmail',
           timeout: 45000
         });
@@ -252,7 +252,7 @@ function add(a: number, b: number): number {
     let copilotProvider: any;
 
     beforeEach(async () => {
-      // 직접 CopilotProvider 테스트
+      // Direct CopilotProvider tests
       const { CopilotProvider } = await import('../src/providers/copilot.provider');
       const { StderrLogger } = await import('../src/stderr.logger');
       
@@ -286,7 +286,7 @@ function add(a: number, b: number): number {
     it('should generate proper query command with prompt', async () => {
       const testPrompt = 'Hello world test';
       
-      // BaseAIProvider의 query 메서드 시뮬레이션
+      // Simulate BaseAIProvider's query method
       const args = [...copilotProvider.getDefaultArgs(), testPrompt];
       const command = `${copilotProvider.getCliCommand()} ${args.join(' ')}`;
       
@@ -298,9 +298,9 @@ function add(a: number, b: number): number {
     it('should generate proper execute command with prompt (updated format)', async () => {
       const testPrompt = 'Execute this task';
       
-      // BaseAIProvider의 execute 메서드 시뮬레이션 (Copilot 특별 처리)
+      // Simulate BaseAIProvider's execute method (special handling for Copilot)
       let args = copilotProvider.getExecuteArgs(); // ['-p']
-      args = [...args, testPrompt, '--allow-all-tools']; // Copilot 특별 처리
+      args = [...args, testPrompt, '--allow-all-tools']; // Special handling for Copilot
       const command = `${copilotProvider.getCliCommand()} ${args.join(' ')}`;
       
       console.log('🔧 Generated Execute Command (NEW):', command);
@@ -340,7 +340,7 @@ function add(a: number, b: number): number {
           expect(result.content).toBeTruthy();
         } else {
           console.log('❌ Copilot query failed:', result.error);
-          // 실패해도 테스트는 통과시키고 디버깅 정보만 출력
+          // Even if it fails, pass the test and just print debug info
         }
       } catch (error: any) {
         console.log('❌ Copilot query threw error:', error.message);
@@ -383,7 +383,7 @@ function add(a: number, b: number): number {
           expect(result.command.indexOf('--allow-all-tools')).toBeGreaterThan(result.command.indexOf(testPrompt.substring(0, 10)));
         } else {
           console.log('❌ Copilot execute failed:', result.error);
-          // 오류 상세 정보 출력
+          // Print detailed error information
           console.log('   Command that failed:', result.command);
         }
       } catch (error: any) {

@@ -6,9 +6,15 @@ import { parseCliOptions } from "./cli-options";
 import { StderrLogger } from './stderr.logger';
 import { SERVER_NAME } from './constants';
 import { getErrorMessage, getErrorStack } from './utils/error-utils';
+import { CLIHandler } from './cli/cli.handler';
 
 const logger = new Logger('Bootstrap');
 const args = parseCliOptions();
+
+// If --help or -h is used, force the command to be 'help'
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  args.command = 'help';
+}
 
 async function cli() {
   try {
@@ -116,9 +122,46 @@ async function bootstrap() {
   }
 }
 
-// Check CLI mode and execute
-if (args.install) {
-  cli();
-} else {
-  bootstrap();
+async function runCli() {
+  if (args.command) {
+    // Handle CLI commands
+    const app = await NestFactory.createApplicationContext(AppModule.forRoot(args), {
+      logger: args.log ? new StderrLogger('CodeCrewCLI', { timestamp: true }) : false,
+    });
+    const cliHandler = new CLIHandler();
+    await cliHandler.handleCommand(app, args);
+  } else {
+    // Show help if no command is given
+    const app = await NestFactory.createApplicationContext(AppModule.forRoot(args), {
+      logger: args.log ? new StderrLogger('CodeCrewCLI', { timestamp: true }) : false,
+    });
+    const cliHandler = new CLIHandler();
+    await cliHandler.handleCommand(app, { ...args, command: 'help' });
+  }
 }
+
+// Main application routing logic
+async function main() {
+  if (args.install) {
+    // Installation mode
+    await cli();
+  } else if (args.command === 'mcp') {
+    // Explicit MCP Server mode
+    if (args.log) logger.log('Starting MCP server mode...');
+    await bootstrap();
+  } else if (!args.command) {
+    // No command specified - show help
+    if (args.log) logger.log('Starting CLI mode (help)...');
+    await runCli();
+  } else {
+    // CLI command mode
+    if (args.log) logger.log('Starting CLI mode...');
+    await runCli();
+  }
+}
+
+// Execute main function
+main().catch(err => {
+  logger.error('Error during application startup:', err);
+  process.exit(1);
+});

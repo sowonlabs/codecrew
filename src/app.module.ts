@@ -11,6 +11,13 @@ import { AIProviderService } from './ai-provider.service';
 import { ClaudeProvider } from './providers/claude.provider';
 import { CopilotProvider } from './providers/copilot.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { ParallelProcessingService } from './services/parallel-processing.service';
+import { TaskManagementService } from './services/task-management.service';
+import { ResultFormatterService } from './services/result-formatter.service';
+import { InitHandler } from './cli/init.handler';
+import { DoctorHandler } from './cli/doctor.handler';
+import { HelpService } from './services/help.service';
+import { ConfigService } from './services/config.service';
 
 @Module({})
 export class AppModule {
@@ -40,6 +47,13 @@ export class AppModule {
         ClaudeProvider,
         CopilotProvider,
         GeminiProvider,
+        ParallelProcessingService,
+        TaskManagementService,
+        ResultFormatterService,
+        InitHandler,
+        DoctorHandler,
+        HelpService,
+        ConfigService,
       ],
       controllers: [McpController],
       exports: [AIService, ProjectService, CodeCrewTool, AIProviderService],

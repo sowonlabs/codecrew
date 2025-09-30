@@ -1,4 +1,4 @@
-# CodeCrew MCP Server - GitHub Copilot Instructions
+# CodeCrew MCP Server - Claude Instructions
 
 ## Project Overview
 

@@ -3,7 +3,8 @@
     "codecrew": {
       "command": "node",
       "args": [
-        "${workspaceFolder}/dist/main.js"
+        "${workspaceFolder}/dist/main.js",
+        "mcp"
       ],
       "env": {
         "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"

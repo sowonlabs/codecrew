@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import * as glob from 'fast-glob';
+import glob from 'fast-glob';
 import ignore from 'ignore';
 import { getErrorMessage, getErrorStack } from './utils/error-utils';
 
@@ -138,7 +138,7 @@ export class ProjectService {
       });
 
       const filteredFiles = files
-        .filter(file => {
+        .filter((file: any) => {
           const relativePath = path.relative(projectPath, file);
           return !ig.ignores(relativePath);
         })
@@ -218,7 +218,7 @@ export class ProjectService {
     const files = await glob(patterns, { cwd: projectPath });
     
     const languages = new Set<string>();
-    files.forEach(file => {
+    files.forEach((file: any) => {
       const ext = path.extname(file).slice(1);
       const lang = this.getLanguageFromExtension(ext);
       if (lang) languages.add(lang);

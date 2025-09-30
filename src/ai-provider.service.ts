@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AIProvider, AIQueryOptions, AIResponse, ProviderNotAvailableError } from './providers/ai-provider.interface';
 import { ClaudeProvider } from './providers/claude.provider';
 import { CopilotProvider } from './providers/copilot.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 
 @Injectable()
-export class AIProviderService {
+export class AIProviderService implements OnModuleInit {
   private readonly logger = new Logger(AIProviderService.name);
   private readonly providers = new Map<string, AIProvider>();
   private availableProviders: string[] = [];
@@ -14,7 +14,9 @@ export class AIProviderService {
     private readonly claudeProvider: ClaudeProvider,
     private readonly copilotProvider: CopilotProvider,
     private readonly geminiProvider: GeminiProvider,
-  ) {
+  ) {}
+
+  onModuleInit() {
     this.registerProvider(this.claudeProvider);
     this.registerProvider(this.copilotProvider);
     this.registerProvider(this.geminiProvider);
