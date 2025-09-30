@@ -34,6 +34,7 @@ export interface AgentResponse {
   error?: string;
   actions?: AgentAction[]; // Executed actions
   readOnly?: boolean; // Whether executed in read-only mode
+  taskId?: string; // Task ID for tracking
 }
 
 export interface AgentAction {

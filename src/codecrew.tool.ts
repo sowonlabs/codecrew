@@ -8,72 +8,21 @@ import { ProjectService } from './project.service';
 import { PREFIX_TOOL_NAME, SERVER_NAME } from './constants';
 import { AgentInfo } from './agent.types';
 import { getErrorMessage, getErrorStack } from './utils/error-utils';
-
-// Interface for tracking task IDs and logs
-interface TaskLog {
-  id: string;
-  type: 'query' | 'execute';
-  agentId?: string;
-  provider: 'claude' | 'gemini' | 'copilot';
-  startTime: Date;
-  endTime?: Date;
-  status: 'running' | 'completed' | 'failed';
-  prompt: string;
-  result?: any;
-  logs: Array<{
-    timestamp: Date;
-    level: 'info' | 'warn' | 'error';
-    message: string;
-  }>;
-}
+import { ParallelProcessingService } from './services/parallel-processing.service';
+import { TaskManagementService } from './services/task-management.service';
+import { ResultFormatterService } from './services/result-formatter.service';
 
 @Injectable()
 export class CodeCrewTool {
   private readonly logger = new Logger(CodeCrewTool.name);
-  private readonly taskLogs = new Map<string, TaskLog>();
   
   constructor(
     private readonly aiService: AIService,
     private readonly projectService: ProjectService,
+    private readonly parallelProcessingService: ParallelProcessingService,
+    private readonly taskManagementService: TaskManagementService,
+    private readonly resultFormatterService: ResultFormatterService,
   ) {}
-
-  private generateTaskId(): string {
-    return `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private addTaskLog(taskId: string, log: { level: 'info' | 'warn' | 'error'; message: string }) {
-    const task = this.taskLogs.get(taskId);
-    if (task) {
-      task.logs.push({
-        timestamp: new Date(),
-        ...log
-      });
-    }
-  }
-
-  private createTask(type: 'query' | 'execute', provider: 'claude' | 'gemini' | 'copilot', prompt: string, agentId?: string): string {
-    const taskId = this.generateTaskId();
-    this.taskLogs.set(taskId, {
-      id: taskId,
-      type,
-      agentId,
-      provider,
-      startTime: new Date(),
-      status: 'running',
-      prompt,
-      logs: []
-    });
-    return taskId;
-  }
-
-  private completeTask(taskId: string, result: any, success: boolean) {
-    const task = this.taskLogs.get(taskId);
-    if (task) {
-      task.endTime = new Date();
-      task.status = success ? 'completed' : 'failed';
-      task.result = result;
-    }
-  }
 
 
 
@@ -100,60 +49,13 @@ export class CodeCrewTool {
     this.logger.log('=== getTaskLogs called ===');
     this.logger.log(`Input taskId: ${input.taskId}`);
     
-    const fs = require('fs');
-    const path = require('path');
-    const logsDir = path.join(process.cwd(), '.codecrew', 'logs');
-    
     try {
-      // 로그 디렉토리 확인
-      if (!fs.existsSync(logsDir)) {
-        this.logger.log('Logs directory does not exist');
-        return {
-          content: [{ type: 'text', text: 'Logs directory not found' }],
-          isError: false
-        };
-      }
+      const logsContent = this.taskManagementService.getTaskLogsFromFile(input.taskId);
       
-      // 로그 파일 목록 읽기
-      const logFiles = fs.readdirSync(logsDir).filter((file: string) => file.endsWith('.log'));
-      this.logger.log(`Found ${logFiles.length} log files in ${logsDir}`);
-      
-      if (input.taskId) {
-        // 특정 태스크 로그 조회
-        const logFile = `${input.taskId}.log`;
-        const logPath = path.join(logsDir, logFile);
-        
-        if (fs.existsSync(logPath)) {
-          const content = fs.readFileSync(logPath, 'utf-8');
-          this.logger.log(`Reading log file: ${logFile}`);
-          this.logger.log(`Log content length: ${content.length} characters`);
-          
-          return {
-            content: [{ type: 'text', text: content }],
-            isError: false
-          };
-        } else {
-          this.logger.log(`Log file not found: ${logFile}`);
-          return {
-            content: [{ type: 'text', text: `Task log not found: ${input.taskId}` }],
-            isError: false
-          };
-        }
-      } else {
-        // 모든 태스크 목록 조회
-        this.logger.log('Listing all log files:');
-        logFiles.forEach((file: string) => {
-          this.logger.log(`  - ${file}`);
-        });
-        
-        return {
-          content: [{ 
-            type: 'text', 
-            text: `Found ${logFiles.length} task logs:\n${logFiles.map((f: string) => f.replace('.log', '')).join('\n')}` 
-          }],
-          isError: false
-        };
-      }
+      return {
+        content: [{ type: 'text', text: logsContent }],
+        isError: false
+      };
     } catch (error: any) {
       this.logger.error('Error reading logs:', error);
       return {
@@ -284,60 +186,54 @@ No AI providers could be verified.`
       
       this.logger.log(`AGENTS_CONFIG environment variable: ${agentsConfigPath}`);
       
-      let agents;
+      let agents: AgentInfo[] = [];
+      
+      // Try to load from config file if path is specified
       if (agentsConfigPath) {
         this.logger.log(`Loading agents from external config: ${agentsConfigPath}`);
         agents = await this.loadAgentsFromConfig(agentsConfigPath);
         this.logger.log(`Loaded ${agents.length} agents from config file`);
-      } else {
-        // Default agent list (when environment variable is not set)
-        agents = [
-          {
-            id: 'frontend_developer',
-            name: 'Frontend Specialist',
-            role: 'Frontend Developer',
-            team: 'Development Team',
-            provider: 'claude',
-            workingDirectory: './frontend',
-            capabilities: ['code_analysis', 'ui_review', 'component_design'],
-            description: 'Frontend developer specializing in React, Vue.js, and modern UI frameworks. Expert in component architecture, responsive design, and user experience.',
-            specialties: ['React', 'Vue.js', 'CSS', 'TypeScript', 'UI/UX']
-          },
-          {
-            id: 'backend_developer',
-            name: 'Backend Specialist',
-            role: 'Backend Developer',
-            team: 'Development Team', 
-            provider: 'gemini',
-            workingDirectory: './backend',
-            capabilities: ['api_design', 'database_optimization', 'architecture_review'],
-            description: 'Backend developer specializing in Node.js, Express, and database management. Expert in API design, performance optimization, and system architecture.',
-            specialties: ['Node.js', 'Express', 'PostgreSQL', 'MongoDB', 'REST APIs', 'GraphQL']
-          },
-          {
-            id: 'devops_engineer',
-            name: 'DevOps Specialist',
-            role: 'DevOps Engineer',
-            team: 'Infrastructure Team',
-            provider: 'copilot',
-            workingDirectory: './',
-            capabilities: ['infrastructure_analysis', 'ci_cd_optimization', 'deployment_strategy'],
-            description: 'DevOps engineer specializing in deployment, infrastructure, and CI/CD optimization. Expert in containerization, cloud platforms, and automation.',
-            specialties: ['Docker', 'Kubernetes', 'AWS', 'GitHub Actions', 'Terraform']
-          },
-          {
-            id: 'security_analyst',
-            name: 'Security Specialist',
-            role: 'Security Analyst',
-            team: 'Security Team',
-            provider: 'claude',
-            workingDirectory: './',
-            capabilities: ['security_audit', 'vulnerability_assessment', 'compliance_check'],
-            description: 'Security analyst specializing in code security, vulnerability assessment, and compliance. Expert in secure coding practices and threat analysis.',
-            specialties: ['Security Audit', 'OWASP', 'Penetration Testing', 'Compliance']
-          }
-        ];
       }
+      
+      // Always add default CLI agents (@claude, @gemini, @copilot)
+      const defaultCliAgents: AgentInfo[] = [
+        {
+          id: 'claude',
+          name: 'Claude AI',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'claude',
+          workingDirectory: './',
+          capabilities: ['general_assistance', 'code_analysis', 'writing'],
+          description: 'Claude AI assistant for general tasks, code analysis, and writing assistance.',
+          specialties: ['General AI', 'Code Analysis', 'Writing', 'Problem Solving']
+        },
+        {
+          id: 'gemini',
+          name: 'Gemini AI',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'gemini',
+          workingDirectory: './',
+          capabilities: ['general_assistance', 'code_analysis', 'research'],
+          description: 'Gemini AI assistant for general tasks, code analysis, and research assistance.',
+          specialties: ['General AI', 'Code Analysis', 'Research', 'Data Analysis']
+        },
+        {
+          id: 'copilot',
+          name: 'GitHub Copilot',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'copilot',
+          workingDirectory: './',
+          capabilities: ['code_generation', 'code_completion', 'debugging'],
+          description: 'GitHub Copilot AI assistant for code generation, completion, and debugging.',
+          specialties: ['Code Generation', 'Code Completion', 'Debugging', 'GitHub Integration']
+        }
+      ];
+      
+      // Add default CLI agents to the list
+      agents = [...agents, ...defaultCliAgents];
 
       this.logger.log(`Retrieved ${agents.length} available agents`);
       
@@ -455,14 +351,19 @@ agents:
     query: string;
   }) {
     // Generate task ID and start tracking
-    const taskId = this.createTask('query', 'claude', args.query, args.agentId); // provider will be determined later
-    this.addTaskLog(taskId, { level: 'info', message: `Started query agent ${args.agentId}` });
+    const taskId = this.taskManagementService.createTask({
+      type: 'query',
+      provider: 'claude', // will be determined later 
+      prompt: args.query,
+      agentId: args.agentId
+    });
+    this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started query agent ${args.agentId}` });
 
     try {
       const { agentId, query } = args;
       
       this.logger.log(`[${taskId}] Querying agent ${agentId}: ${query.substring(0, 50)}...`);
-      this.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
+      this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
 
       // Dynamically load agent configuration
       const agents = await this.loadAvailableAgents();
@@ -522,8 +423,8 @@ Query: ${query}`;
       });
 
       // Handle task completion
-      this.addTaskLog(taskId, { level: 'info', message: `Query completed. Success: ${response.success}` });
-      this.completeTask(taskId, response, response.success);
+      this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query completed. Success: ${response.success}` });
+      this.taskManagementService.completeTask(taskId, response, response.success);
 
       // Compose MCP response text
       const responseText = `🤖 **Agent Query Response (Read-Only Mode)**
@@ -559,8 +460,8 @@ Use \`getTaskLogs\` with taskId "${taskId}" to see detailed execution logs.
 
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      this.addTaskLog(taskId, { level: 'error', message: `Query failed: ${errorMessage}` });
-      this.completeTask(taskId, { error: errorMessage }, false);
+      this.taskManagementService.addTaskLog(taskId, { level: 'error', message: `Query failed: ${errorMessage}` });
+      this.taskManagementService.completeTask(taskId, { error: errorMessage }, false);
       
       this.logger.error(`[${taskId}] Agent query failed for ${args.agentId}:`, errorMessage);
       return {
@@ -608,14 +509,19 @@ Read-Only Mode: No files were modified.`
     context?: string;
   }) {
     // Generate task ID and start tracking
-    const taskId = this.createTask('execute', 'claude', args.task, args.agentId); // provider will be determined later
-    this.addTaskLog(taskId, { level: 'info', message: `Started execute agent ${args.agentId}` });
+    const taskId = this.taskManagementService.createTask({
+      type: 'execute',
+      provider: 'claude', // will be determined later
+      prompt: args.task,
+      agentId: args.agentId
+    });
+    this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started execute agent ${args.agentId}` });
 
     try {
       const { agentId, task, projectPath, context } = args;
       
       this.logger.log(`[${taskId}] Executing agent ${agentId}: ${task.substring(0, 50)}...`);
-      this.addTaskLog(taskId, { level: 'info', message: `Task: ${task.substring(0, 100)}...` });
+      this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Task: ${task.substring(0, 100)}...` });
 
       // Dynamically load agent configuration
       const agents = await this.loadAvailableAgents();
@@ -673,7 +579,7 @@ Please provide detailed, actionable implementation guidance including:
       // Use agent's AI provider (execution mode)
       let response;
       const provider = agent.provider || 'claude';
-      this.addTaskLog(taskId, { level: 'info', message: `Using provider: ${provider}` });
+      this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using provider: ${provider}` });
       
       // Use new unified executeAI for all providers
       response = await this.aiService.executeAI(fullPrompt, provider, {
@@ -684,8 +590,8 @@ Please provide detailed, actionable implementation guidance including:
       });
 
       // Handle task completion
-      this.addTaskLog(taskId, { level: 'info', message: `Execution completed. Success: ${response.success}` });
-      this.completeTask(taskId, response, response.success);
+      this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Execution completed. Success: ${response.success}` });
+      this.taskManagementService.completeTask(taskId, response, response.success);
 
       // Compose MCP response text
       const responseText = `⚡ **Agent Execution Response**
@@ -732,8 +638,8 @@ Use \`getTaskLogs\` with taskId "${taskId}" to see detailed execution logs.
 
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      this.addTaskLog(taskId, { level: 'error', message: `Execution failed: ${errorMessage}` });
-      this.completeTask(taskId, { error: errorMessage }, false);
+      this.taskManagementService.addTaskLog(taskId, { level: 'error', message: `Execution failed: ${errorMessage}` });
+      this.taskManagementService.completeTask(taskId, { error: errorMessage }, false);
       
       this.logger.error(`[${taskId}] Agent execution failed for ${args.agentId}:`, errorMessage);
       return {
@@ -767,62 +673,55 @@ Execution Mode: Implementation guidance could not be provided.`
       // Check agent configuration file path from environment variable
       const agentsConfigPath = process.env.AGENTS_CONFIG;
       
+      let agents: AgentInfo[] = [];
+      
+      // Try to load from config file if path is specified
       if (agentsConfigPath) {
         this.logger.log(`Loading agents from external config: ${agentsConfigPath}`);
-        return await this.loadAgentsFromConfig(agentsConfigPath);
-      } else {
-        // Return default agent list
-        return [
-          {
-            id: 'frontend_developer',
-            name: 'Frontend Specialist',
-            role: 'Frontend Developer',
-            team: 'Development Team',
-            provider: 'claude',
-            workingDirectory: './frontend',
-            capabilities: ['code_analysis', 'ui_review', 'component_design'],
-            description: 'Frontend developer specializing in React, Vue.js, and modern UI frameworks. Expert in component architecture, responsive design, and user experience.',
-            specialties: ['React', 'Vue.js', 'CSS', 'TypeScript', 'UI/UX'],
-            systemPrompt: 'You are an expert frontend developer specializing in React, Vue.js, and modern UI frameworks.'
-          },
-          {
-            id: 'backend_developer',
-            name: 'Backend Specialist',
-            role: 'Backend Developer',
-            team: 'Development Team', 
-            provider: 'gemini',
-            workingDirectory: './backend',
-            capabilities: ['api_design', 'database_optimization', 'architecture_review'],
-            description: 'Backend developer specializing in Node.js, Express, and database management. Expert in API design, performance optimization, and system architecture.',
-            specialties: ['Node.js', 'Express', 'PostgreSQL', 'MongoDB', 'REST APIs', 'GraphQL'],
-            systemPrompt: 'You are an expert backend developer specializing in Node.js, Express, and database management.'
-          },
-          {
-            id: 'devops_engineer',
-            name: 'DevOps Specialist',
-            role: 'DevOps Engineer',
-            team: 'Infrastructure Team',
-            provider: 'copilot',
-            workingDirectory: './',
-            capabilities: ['infrastructure_analysis', 'ci_cd_optimization', 'deployment_strategy'],
-            description: 'DevOps engineer specializing in deployment, infrastructure, and CI/CD optimization. Expert in containerization, cloud platforms, and automation.',
-            specialties: ['Docker', 'Kubernetes', 'AWS', 'GitHub Actions', 'Terraform'],
-            systemPrompt: 'You are an expert DevOps engineer specializing in deployment, infrastructure, and CI/CD optimization.'
-          },
-          {
-            id: 'security_analyst',
-            name: 'Security Specialist',
-            role: 'Security Analyst',
-            team: 'Security Team',
-            provider: 'claude',
-            workingDirectory: './',
-            capabilities: ['security_audit', 'vulnerability_assessment', 'compliance_check'],
-            description: 'Security analyst specializing in code security, vulnerability assessment, and compliance. Expert in secure coding practices and threat analysis.',
-            specialties: ['Security Audit', 'OWASP', 'Penetration Testing', 'Compliance'],
-            systemPrompt: 'You are an expert security analyst specializing in code security and vulnerability assessment.'
-          }
-        ];
+        agents = await this.loadAgentsFromConfig(agentsConfigPath);
       }
+      
+      // Always add default CLI agents (@claude, @gemini, @copilot)
+      const defaultCliAgents: AgentInfo[] = [
+        {
+          id: 'claude',
+          name: 'Claude AI',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'claude',
+          workingDirectory: './',
+          capabilities: ['general_assistance', 'code_analysis', 'writing'],
+          description: 'Claude AI assistant for general tasks, code analysis, and writing assistance.',
+          specialties: ['General AI', 'Code Analysis', 'Writing', 'Problem Solving']
+        },
+        {
+          id: 'gemini',
+          name: 'Gemini AI',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'gemini',
+          workingDirectory: './',
+          capabilities: ['general_assistance', 'code_analysis', 'research'],
+          description: 'Gemini AI assistant for general tasks, code analysis, and research assistance.',
+          specialties: ['General AI', 'Code Analysis', 'Research', 'Data Analysis']
+        },
+        {
+          id: 'copilot',
+          name: 'GitHub Copilot',
+          role: 'AI Assistant',
+          team: 'AI Team',
+          provider: 'copilot',
+          workingDirectory: './',
+          capabilities: ['code_generation', 'code_completion', 'debugging'],
+          description: 'GitHub Copilot AI assistant for code generation, completion, and debugging.',
+          specialties: ['Code Generation', 'Code Completion', 'Debugging', 'GitHub Integration']
+        }
+      ];
+      
+      // Add default CLI agents to the list
+      agents = [...agents, ...defaultCliAgents];
+
+      return agents;
     } catch (error) {
       this.logger.error('Failed to load agents:', getErrorMessage(error));
       return [];
@@ -944,105 +843,69 @@ Please provide at least one query in the queries array.
         this.logger.log(`Query ${index + 1}: ${q.agentId} -> "${q.query.substring(0, 50)}..."`);
       });
 
-      const startTime = Date.now();
+      // Use ParallelProcessingService for parallel execution
+      const result = await this.parallelProcessingService.queryAgentsParallel(queries, {
+        maxConcurrency: 5,
+        timeout: 300000,
+        failFast: false
+      });
 
-      // Use Promise.all for parallel processing
-      const results = await Promise.all(
-        queries.map(async (queryItem, index) => {
-          const queryStartTime = Date.now();
-          
-          try {
-            // Reuse existing queryAgent method
-            const result = await this.queryAgent({
-              agentId: queryItem.agentId,
-              query: queryItem.query,
-            });
+      const { results, summary } = result;
+      const successCount = summary.successful;
+      const failureCount = summary.failed;
 
-            const queryDuration = Date.now() - queryStartTime;
-            
-            return {
-              index: index + 1,
-              agentId: queryItem.agentId,
-              query: queryItem.query,
-              success: result.success,
-              response: result.response || result.error,
-              provider: result.provider,
-              duration: queryDuration,
-              error: result.error,
-              context: queryItem.context
-            };
-          } catch (error: any) {
-            const queryDuration = Date.now() - queryStartTime;
-            
-            return {
-              index: index + 1,
-              agentId: queryItem.agentId,
-              query: queryItem.query,
-              success: false,
-              response: null,
-              provider: 'unknown',
-              duration: queryDuration,
-              error: error.message || 'Unknown error occurred',
-              context: queryItem.context
-            };
-          }
-        })
+      this.logger.log(`Parallel queries completed: ${successCount} success, ${failureCount} failed, ${summary.totalDuration}ms total`);
+
+      // Add taskId information to results
+      const enhancedResults = results.map((r, index) => ({
+        index: index + 1,
+        agentId: r.agentId,
+        query: queries[index]?.query || '',
+        success: r.success,
+        response: r.result?.response || r.result?.content || r.error,
+        provider: r.result?.provider || 'unknown',
+        duration: r.duration,
+        error: r.error,
+        context: queries[index]?.context,
+        taskId: r.taskId || r.result?.taskId
+      }));
+
+      // Format response using ResultFormatterService
+      const formattedResult = this.resultFormatterService.formatParallelResult(
+        enhancedResults, 
+        {
+          total: summary.total,
+          success: summary.successful,
+          failed: summary.failed,
+          totalDuration: summary.totalDuration,
+          averageDuration: summary.averageDuration,
+          fastest: Math.min(...results.map(r => r.duration)),
+          slowest: Math.max(...results.map(r => r.duration)),
+          timeSaved: Math.max(0, results.reduce((sum, r) => sum + r.duration, 0) - summary.totalDuration)
+        },
+        true // readOnly mode
       );
-
-      const totalDuration = Date.now() - startTime;
-      const successCount = results.filter(r => r.success).length;
-      const failureCount = results.length - successCount;
-
-      this.logger.log(`Parallel queries completed: ${successCount} success, ${failureCount} failed, ${totalDuration}ms total`);
-
-      // Compose MCP response text
-      const responseText = `🚀 **Parallel Agent Queries Results**
-
-**Summary:**
-- Total Queries: ${results.length}
-- Successful: ${successCount}
-- Failed: ${failureCount}
-- Total Duration: ${totalDuration}ms
-- Average Duration: ${Math.round(totalDuration / results.length)}ms per query
-
-**Individual Results:**
-
-${results.map(result => `---
-**${result.index}. Agent: ${result.agentId}** (${result.provider}) - ${result.duration}ms
-**Query:** ${result.query}
-**Status:** ${result.success ? '✅ Success' : '❌ Failed'}
-${result.context ? `**Context:** ${result.context}\n` : ''}
-**Response:**
-${result.success ? result.response : `Error: ${result.error}`}
-`).join('\n')}
-
-**Performance Insights:**
-- Fastest Query: ${Math.min(...results.map(r => r.duration))}ms
-- Slowest Query: ${Math.max(...results.map(r => r.duration))}ms
-- Parallel processing saved approximately ${Math.max(0, results.reduce((sum, r) => sum + r.duration, 0) - totalDuration)}ms compared to sequential execution
-
-**Read-Only Mode:** All queries were executed in analysis mode without file modifications.`;
 
       return {
         content: [
           { 
             type: 'text', 
-            text: responseText
+            text: formattedResult.mcp
           }
         ],
         success: true,
         summary: {
-          totalQueries: results.length,
-          successful: successCount,
-          failed: failureCount,
-          totalDuration,
-          averageDuration: Math.round(totalDuration / results.length)
+          totalQueries: summary.total,
+          successful: summary.successful,
+          failed: summary.failed,
+          totalDuration: summary.totalDuration,
+          averageDuration: summary.averageDuration
         },
-        results: results,
+        results: enhancedResults,
         performance: {
           fastestQuery: Math.min(...results.map(r => r.duration)),
           slowestQuery: Math.max(...results.map(r => r.duration)),
-          timeSaved: Math.max(0, results.reduce((sum, r) => sum + r.duration, 0) - totalDuration)
+          timeSaved: Math.max(0, results.reduce((sum, r) => sum + r.duration, 0) - summary.totalDuration)
         },
         readOnlyMode: true
       };
@@ -1168,7 +1031,8 @@ Please provide at least one task in the tasks array.
               error: result.error,
               context: taskItem.context,
               workingDirectory: taskItem.projectPath || `Default for ${taskItem.agentId}`,
-              recommendations: result.recommendations || []
+              recommendations: result.recommendations || [],
+              taskId: result.taskId
             };
           } catch (error: any) {
             const taskDuration = Date.now() - taskStartTime;
@@ -1184,7 +1048,8 @@ Please provide at least one task in the tasks array.
               error: error.message || 'Unknown error occurred',
               context: taskItem.context,
               workingDirectory: taskItem.projectPath || `Default for ${taskItem.agentId}`,
-              recommendations: []
+              recommendations: [],
+              taskId: null
             };
           }
         })

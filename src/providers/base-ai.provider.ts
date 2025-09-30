@@ -50,6 +50,14 @@ export abstract class BaseAIProvider implements AIProvider {
     return false; // Default is to use stdin
   }
 
+  /**
+   * Parse provider-specific error messages to provide better user feedback
+   */
+  protected parseProviderError(stderr: string, stdout: string): string {
+    // Default implementation returns stderr as-is
+    return stderr;
+  }
+
   async getToolPath(): Promise<string | null> {
     if (this.cachedPath !== null) {
       return this.cachedPath;
@@ -183,12 +191,13 @@ Started: ${timestamp}
 
           if (code !== 0) {
             this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed with exit code ${code}`);
+            const parsedError = this.parseProviderError(stderr, stdout);
             resolve({
               content: '',
               provider: this.name,
               command,
               success: false,
-              error: `${this.name} CLI failed: ${stderr || `Exit code ${code}`}`,
+              error: `${this.name} CLI failed: ${parsedError || `Exit code ${code}`}`,
               taskId,
             });
             return;
@@ -332,12 +341,13 @@ Started: ${timestamp}
 
           if (code !== 0) {
             this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI execute failed with exit code ${code}`);
+            const parsedError = this.parseProviderError(stderr, stdout);
             resolve({
               content: '',
               provider: this.name,
               command,
               success: false,
-              error: `${this.name} CLI execute failed: ${stderr || `Exit code ${code}`}`,
+              error: `${this.name} CLI execute failed: ${parsedError || `Exit code ${code}`}`,
               taskId,
             });
             return;

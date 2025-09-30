@@ -11,6 +11,9 @@ import { AIProviderService } from './ai-provider.service';
 import { ClaudeProvider } from './providers/claude.provider';
 import { CopilotProvider } from './providers/copilot.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { ParallelProcessingService } from './services/parallel-processing.service';
+import { TaskManagementService } from './services/task-management.service';
+import { ResultFormatterService } from './services/result-formatter.service';
 
 @Module({})
 export class AppModule {
@@ -40,6 +43,9 @@ export class AppModule {
         ClaudeProvider,
         CopilotProvider,
         GeminiProvider,
+        ParallelProcessingService,
+        TaskManagementService,
+        ResultFormatterService,
       ],
       controllers: [McpController],
       exports: [AIService, ProjectService, CodeCrewTool, AIProviderService],

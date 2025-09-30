@@ -6,6 +6,7 @@ import { parseCliOptions } from "./cli-options";
 import { StderrLogger } from './stderr.logger';
 import { SERVER_NAME } from './constants';
 import { getErrorMessage, getErrorStack } from './utils/error-utils';
+import { CLIHandler } from './cli/cli.handler';
 
 const logger = new Logger('Bootstrap');
 const args = parseCliOptions();
@@ -119,6 +120,10 @@ async function bootstrap() {
 // Check CLI mode and execute
 if (args.install) {
   cli();
+} else if (args.command) {
+  // Handle CLI commands
+  const cliHandler = new CLIHandler();
+  cliHandler.handleCommand(args);
 } else {
   bootstrap();
 }
