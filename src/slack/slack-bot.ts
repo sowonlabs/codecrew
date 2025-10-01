@@ -45,7 +45,14 @@ export class SlackBot {
       const text = (message as any).text || '';
       this.logger.debug(`💬 Message received: "${text.substring(0, 50)}..."`);
 
-      // Check if message mentions codecrew (case insensitive)
+      // Skip if this is an app_mention event (already handled by app_mention handler)
+      // App mentions include <@BOTID> in the text
+      if (text.match(/<@[A-Z0-9]+>/)) {
+        this.logger.debug(`⏭️  Skipping app_mention (handled by app_mention handler)`);
+        return;
+      }
+
+      // Check if message mentions codecrew (case insensitive) or is a DM
       if (text.toLowerCase().includes('codecrew') || (message as any).channel_type === 'im') {
         this.logger.log(`🎯 Processing message from ${(message as any).user}`);
         await this.handleCommand({ message, say, client });

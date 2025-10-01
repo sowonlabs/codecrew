@@ -76,6 +76,7 @@ export function parseCliOptions(): CliOptions {
       yargs.command('update', 'Clear cache and re-download templates');
     })
     .command('mcp', 'Start MCP server for IDE integration', () => {})
+    .command('slack', 'Start Slack Bot server', () => {})
     .command('help', 'Show help', () => {})
     .option('install', {
       type: 'boolean',
