@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codecrew": {
+      "command": "codecrew",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+      }
+    }
+  }
+}
