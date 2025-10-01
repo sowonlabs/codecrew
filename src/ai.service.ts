@@ -21,6 +21,7 @@ export interface AIQueryOptions {
   timeout?: number;
   workingDirectory?: string;
   additionalArgs?: string[];
+  model?: string; // Model to use for this query (e.g., "sonnet", "gemini-2.5-pro", "gpt-5")
 }
 
 @Injectable()
@@ -372,11 +373,8 @@ Started: ${timestamp}
       this.appendTaskLog(taskId, 'INFO', `Starting Gemini query mode`);
       this.appendTaskLog(taskId, 'INFO', `Prompt length: ${prompt.length} characters`);
       
-      // Log prompt content (first 500 chars or entire content)
-      const promptPreview = prompt.length > 500 ? 
-        prompt.substring(0, 500) + '...[truncated]' : 
-        prompt;
-      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${promptPreview}`);
+      // Log prompt content (entire content for debugging)
+      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${prompt}`);
 
       return new Promise((resolve, reject) => {
         // Use stdin mode for query (no --yolo for safety)
@@ -494,11 +492,8 @@ Started: ${timestamp}
       this.appendTaskLog(taskId, 'INFO', `Prompt length: ${prompt.length} characters`);
       this.appendTaskLog(taskId, 'INFO', `Working directory: ${options.workingDirectory || process.cwd()}`);
       
-      // Log prompt content (first 500 chars or entire content)
-      const promptPreview = prompt.length > 500 ? 
-        prompt.substring(0, 500) + '...[truncated]' : 
-        prompt;
-      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${promptPreview}`);
+      // Log prompt content (entire content for debugging)
+      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${prompt}`);
 
       return new Promise((resolve, reject) => {
         // Use --yolo mode for autonomous execution

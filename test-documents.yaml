@@ -1,0 +1,21 @@
+# Test documents configuration for inline content
+
+documents:
+  # Raw string format
+  inline-test: |
+    # Inline Document Test
+    This is a test document with raw markdown content.
+    
+    ## Features
+    - Direct markdown in YAML
+    - No external file needed
+    - Immediate availability
+  
+  # Object format with content
+  object-test:
+    content: |
+      # Object Format Test
+      ## Section 1
+      Content in object format
+    summary: "Test document in object format"
+    type: "markdown"
