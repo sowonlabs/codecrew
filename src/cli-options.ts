@@ -7,6 +7,7 @@ export interface CliOptions {
   protocol: 'STDIO' | 'HTTP';
   port: number;
   allowTool: string[]; // Support for --allow-tool=terminal,files,web
+  raw: boolean; // Output only AI response (for piping)
   // CLI commands
   command?: string;
   query?: string | string[];
@@ -73,6 +74,11 @@ export function parseCliOptions(): CliOptions {
         return value || [];
       }
     })
+    .option('raw', {
+      type: 'boolean',
+      default: false,
+      description: 'Output only AI response without formatting (useful for piping)'
+    })
     // API key options removed for security
     // Use environment variables or CLI tool authentication instead
     .help(false)
@@ -84,9 +90,12 @@ export function parseCliOptions(): CliOptions {
     protocol: parsed.protocol as 'STDIO' | 'HTTP',
     port: parsed.port,
     allowTool: parsed['allow-tool'] as string[] || [],
+    raw: parsed.raw,
     command: parsed._[0] as string,
-    query: Array.isArray(parsed.message) ? parsed.message.join(' ') : parsed.message as string,
-    execute: Array.isArray(parsed.task) ? parsed.task.join(' ') : parsed.task as string,
+    // Keep query as array for parallel processing support
+    query: Array.isArray(parsed.message) ? parsed.message : (parsed.message ? [parsed.message as string] : undefined),
+    // Keep execute as array for parallel processing support
+    execute: Array.isArray(parsed.task) ? parsed.task : (parsed.task ? [parsed.task as string] : undefined),
     doctor: parsed._[0] === 'doctor',
     config: parsed.config
   };

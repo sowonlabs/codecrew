@@ -17,94 +17,132 @@ export async function handleQuery(app: any, args: CliOptions) {
     console.log('Usage: codecrew query "<message>"');
     console.log('Example: codecrew query "@backend analyze this API"');
     console.log('Example: codecrew query "@backend @frontend implement login feature"');
+    console.log('Example (parallel): codecrew query "@claude 1+1?" "@claude 2+2?"');
     process.exit(1);
   }
 
   try {
-    const queryMessage = Array.isArray(args.query) ? args.query.join(' ') : args.query || '';
-    console.log(`🔍 Processing query: ${queryMessage}`);
-
-    // 1. Parse mentions from query using simple regex
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/g;
-    const mentions = [...queryMessage.matchAll(mentionRegex)].map(match => match[1]);
-    const taskText = queryMessage.replace(mentionRegex, '').trim();
-
-    if (mentions.length === 0) {
-      console.log('❌ No agent mentions found in query');
-      console.log('Please specify agents using @agent_name format');
-      console.log('Example: codecrew query "@backend analyze this code"');
-      process.exit(1);
-    }
-
-    if (!taskText) {
-      console.log('❌ No task message found after removing mentions');
-      console.log('Please provide a task description along with agent mentions');
-      process.exit(1);
-    }
+    // Get query input - support both single string and array of separate queries
+    const queryInput = Array.isArray(args.query) ? args.query : [args.query];
 
     // 2. Check for piped input (stdin) and convert to context
     const pipedInput = await readStdin();
     const contextFromPipe = pipedInput ? formatPipedContext(pipedInput) : undefined;
-    
-    if (pipedInput) {
+
+    if (pipedInput && !args.raw) {
       console.log('📥 Received piped input - using as context');
     }
 
     // 3. Get CodeCrewTool from app context
     const codeCrewTool = app.get(CodeCrewTool);
 
-    console.log(`📋 Task: ${taskText}`);
-    console.log(`🤖 Agents: ${mentions.map(m => `@${m}`).join(' ')}`);
-    console.log('');
+    // Parse each query argument separately
+    interface ParsedQuery {
+      agentId: string;
+      query: string;
+    }
 
-    // 4. Call appropriate method based on number of agents
+    const parsedQueries: ParsedQuery[] = [];
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/;
+
+    for (const queryStr of queryInput) {
+      const match = queryStr.match(mentionRegex);
+      if (match && match[1]) {
+        const agentId: string = match[1];
+        const query = queryStr.replace(mentionRegex, '').trim();
+        if (query) {
+          parsedQueries.push({ agentId, query });
+        }
+      }
+    }
+
+    if (parsedQueries.length === 0) {
+      console.log('❌ No valid agent mentions found in queries');
+      console.log('Please specify agents using @agent_name format');
+      console.log('Example: codecrew query "@backend analyze this code"');
+      console.log('Example (parallel): codecrew query "@claude 1+1?" "@claude 2+2?"');
+      process.exit(1);
+    }
+
+    if (!args.raw) {
+      console.log(`🔍 Processing ${parsedQueries.length} ${parsedQueries.length === 1 ? 'query' : 'queries'}`);
+    }
+
+    // 4. Call appropriate method based on number of queries
     let result;
-    if (mentions.length === 1) {
-      // Single agent query
-      const agentId = mentions[0];
-      console.log(`🔎 Querying single agent: @${agentId}`);
-      console.log('─'.repeat(60));
+    if (parsedQueries.length === 1) {
+      // Single query
+      const firstQuery = parsedQueries[0];
+      if (!firstQuery) {
+        console.log('❌ No valid queries found');
+        process.exit(1);
+      }
+      const { agentId, query } = firstQuery;
+
+      if (!args.raw) {
+        console.log(`📋 Task: ${query}`);
+        console.log(`🤖 Agent: @${agentId}`);
+        console.log('');
+        console.log(`🔎 Querying single agent: @${agentId}`);
+        console.log('─'.repeat(60));
+      }
 
       result = await codeCrewTool.queryAgent({
         agentId: agentId,
-        query: taskText,
+        query: query,
         context: contextFromPipe
       });
 
       // 5. Format and output results for single agent
-      if (agentId && taskText) {
-        formatSingleAgentResult(result, agentId, taskText);
+      if (args.raw) {
+        // Raw mode: output only AI response
+        console.log(result.response || result.error || '');
+      } else {
+        formatSingleAgentResult(result, agentId, query);
       }
 
     } else {
-      // Multiple agents query (parallel)
-      console.log(`🚀 Querying ${mentions.length} agents in parallel:`);
-      mentions.forEach((agent, index) => {
-        console.log(`   ${index + 1}. @${agent}`);
-      });
-      console.log('─'.repeat(60));
+      // Multiple queries (parallel)
+      if (!args.raw) {
+        console.log(`🚀 Querying ${parsedQueries.length} agents in parallel:`);
+        parsedQueries.forEach((pq, index) => {
+          console.log(`   ${index + 1}. @${pq.agentId}: ${pq.query.substring(0, 50)}${pq.query.length > 50 ? '...' : ''}`);
+        });
+        console.log('─'.repeat(60));
+      }
 
-      const queries = mentions.map(agentId => ({
-        agentId: agentId,
-        query: taskText,
+      const queries = parsedQueries.map(pq => ({
+        agentId: pq.agentId,
+        query: pq.query,
         context: contextFromPipe
       }));
 
       result = await codeCrewTool.queryAgentParallel({ queries });
 
       // 5. Format and output results for parallel agents
-      const validMentions = mentions.filter((m): m is string => !!m);
-      if (taskText) {
-        formatParallelAgentResults(result, validMentions, taskText);
+      if (args.raw) {
+        // Raw mode: output only AI responses, one per line
+        if (result.results && Array.isArray(result.results)) {
+          result.results.forEach((agentResult: any) => {
+            console.log(agentResult.response || agentResult.error || '');
+          });
+        }
+      } else {
+        const validAgentIds = parsedQueries.map(pq => pq.agentId);
+        formatParallelAgentResults(result, validAgentIds, '');
       }
     }
 
     if (!result.success) {
-      console.log('\n❌ Query execution failed');
+      if (!args.raw) {
+        console.log('\n❌ Query execution failed');
+      }
       process.exit(1);
     }
 
-    console.log('\n✅ Query completed successfully');
+    if (!args.raw) {
+      console.log('\n✅ Query completed successfully');
+    }
 
   } catch (error) {
     logger.error(`Query failed: ${error instanceof Error ? error.message : error}`);
@@ -165,6 +203,9 @@ function formatParallelAgentResults(result: any, mentions: string[], taskText: s
     if (result.results && Array.isArray(result.results)) {
       result.results.forEach((agentResult: any, index: number) => {
         console.log(`\n${index + 1}. Agent: @${agentResult.agentId} (${agentResult.provider}) - ${agentResult.duration}ms`);
+        if (agentResult.query) {
+          console.log(`   📝 Query: ${agentResult.query}`);
+        }
         if (agentResult.taskId) {
           console.log(`   📋 Task ID: ${agentResult.taskId}`);
         }

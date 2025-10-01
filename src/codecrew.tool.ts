@@ -349,18 +349,19 @@ agents:
   async queryAgent(args: {
     agentId: string;
     query: string;
+    context?: string;
   }) {
     // Generate task ID and start tracking
     const taskId = this.taskManagementService.createTask({
       type: 'query',
-      provider: 'claude', // will be determined later 
+      provider: 'claude', // will be determined later
       prompt: args.query,
       agentId: args.agentId
     });
     this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started query agent ${args.agentId}` });
 
     try {
-      const { agentId, query } = args;
+      const { agentId, query, context } = args;
       
       this.logger.log(`[${taskId}] Querying agent ${agentId}: ${query.substring(0, 50)}...`);
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
@@ -398,16 +399,20 @@ Please check the agent ID and try again.`
 
       // Add read-only mode warning
       systemPrompt += `
-
-IMPORTANT: You are in READ-ONLY ANALYSIS MODE. Do NOT suggest file modifications or code changes.
+<IMPORTANT>
+You are in READ-ONLY ANALYSIS MODE. Do NOT suggest file modifications or code changes.
 Only provide analysis, explanations, reviews, and recommendations based on existing code.
 Focus on understanding and explaining rather than changing anything.
+</IMPORTANT>
 
 Specialties: ${agent.specialties?.join(', ') || 'General'}
 Capabilities: ${agent.capabilities?.join(', ') || 'Analysis'}
 Working Directory: ${workingDir}`;
 
       const fullPrompt = `${systemPrompt}
+<Context>
+${context ? `Context: ${context}\n\n` : ''}
+</Context>
 
 Query: ${query}`;
 
@@ -558,26 +563,23 @@ Please check the agent ID and try again.`
 
       // Add execution mode settings
       systemPrompt += `
-
-EXECUTION MODE: You can provide implementation guidance and suggest code changes.
+<IMPORTANT>
+You can provide implementation guidance and suggest code changes.
 You have access to the working directory and can provide detailed implementation guidance.
 Focus on practical, actionable solutions for ${agent.specialties?.join(', ') || 'development'}.
+</IMPORTANT>
 
 Specialties: ${agent.specialties?.join(', ') || 'General'}
 Capabilities: ${agent.capabilities?.join(', ') || 'Implementation'}
 Working Directory: ${workingDir}`;
 
       const fullPrompt = `${systemPrompt}
-
+<Context>
 ${context ? `Additional Context: ${context}\n` : ''}
+</Context>
 
-Task to Execute: ${task}
-
-Please provide detailed, actionable implementation guidance including:
-1. Step-by-step approach
-2. Code examples or configuration samples
-3. Best practices to follow
-4. Potential issues to watch out for`;
+Task: ${task}
+`;
 
       // Use agent's AI provider (execution mode)
       let response;

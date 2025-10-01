@@ -11,66 +11,85 @@ const logger = new Logger('ExecuteHandler');
  */
 export async function handleExecute(app: any, args: CliOptions) {
   logger.log('Execute command received');
-  
+
   if (!args.execute) {
     logger.error('No execute task provided');
     console.log('Usage: codecrew execute "<task>"');
     console.log('Example: codecrew execute "@frontend @backend implement login"');
+    console.log('Example (parallel): codecrew execute "@claude task1" "@claude task2"');
     process.exit(1);
   }
 
   try {
-    // Parse execute message for agent mentions
-    const executeMessage = Array.isArray(args.execute) ? args.execute.join(' ') : args.execute || '';
-    console.log(`⚡ Processing execute: ${executeMessage}`);
-    
-    // Parse mentions using simple regex (same as query.handler)
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/g;
-    const agents = [...executeMessage.matchAll(mentionRegex)].map(match => match[1]);
-    const task = executeMessage.replace(mentionRegex, '').trim();
-    
-    if (agents.length === 0) {
-      console.log('❌ No agents mentioned. Use @agent syntax (e.g., @gemini @copilot)');
-      process.exit(1);
-    }
-    
-    if (!task) {
-      console.log('❌ No task message found after removing mentions');
-      console.log('Please provide a task description along with agent mentions');
-      process.exit(1);
-    }
-    
+    // Get execute input - support both single string and array of separate tasks
+    const executeInput = Array.isArray(args.execute) ? args.execute : [args.execute];
+
     // Check for piped input (stdin) and convert to context
     const pipedInput = await readStdin();
     const contextFromPipe = pipedInput ? formatPipedContext(pipedInput) : undefined;
-    
+
     if (pipedInput) {
       console.log('📥 Received piped input - using as context');
     }
-    
-    console.log(`📋 Task: ${task}`);
-    console.log(`🤖 Agents: ${agents.map(a => `@${a}`).join(' ')}`);
-    console.log('');
-    
+
     // Get CodeCrewTool from app context
     const codeCrewTool = app.get(CodeCrewTool);
-    
-    if (agents.length === 1) {
-      // Single agent execution
-      console.log(`⚡ Executing task with single agent: @${agents[0]}`);
+
+    // Parse each execute argument separately
+    interface ParsedTask {
+      agentId: string;
+      task: string;
+    }
+
+    const parsedTasks: ParsedTask[] = [];
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/;
+
+    for (const taskStr of executeInput) {
+      const match = taskStr.match(mentionRegex);
+      if (match && match[1]) {
+        const agentId: string = match[1];
+        const task = taskStr.replace(mentionRegex, '').trim();
+        if (task) {
+          parsedTasks.push({ agentId, task });
+        }
+      }
+    }
+
+    if (parsedTasks.length === 0) {
+      console.log('❌ No valid agent mentions found in tasks');
+      console.log('Please specify agents using @agent_name format');
+      console.log('Example: codecrew execute "@backend implement API"');
+      console.log('Example (parallel): codecrew execute "@claude task1" "@claude task2"');
+      process.exit(1);
+    }
+
+    console.log(`⚡ Processing ${parsedTasks.length} ${parsedTasks.length === 1 ? 'task' : 'tasks'}`);
+
+    if (parsedTasks.length === 1) {
+      // Single task execution
+      const firstTask = parsedTasks[0];
+      if (!firstTask) {
+        console.log('❌ No valid tasks found');
+        process.exit(1);
+      }
+      const { agentId, task } = firstTask;
+      console.log(`📋 Task: ${task}`);
+      console.log(`🤖 Agent: @${agentId}`);
+      console.log('');
+      console.log(`⚡ Executing task with single agent: @${agentId}`);
       console.log('────────────────────────────────────────────────────────────');
       console.log('');
-      
+
       const result = await codeCrewTool.executeAgent({
-        agentId: agents[0],
+        agentId: agentId,
         task: task,
         projectPath: process.cwd(),
         context: contextFromPipe
       });
-      
+
       // Format and display result
       const status = result.success ? '🟢 Status: Success' : '🔴 Status: Failed';
-      console.log(`📊 Results from @${agents[0]}:`);
+      console.log(`📊 Results from @${agentId}:`);
       console.log('════════════════════════════════════════════════════════════');
       console.log(status);
       console.log(`🤖 Provider: ${result.provider}`);
@@ -83,23 +102,23 @@ export async function handleExecute(app: any, args: CliOptions) {
       console.log(`📁 Working Directory: ${result.workingDirectory}`);
       console.log('');
       console.log(result.success ? '✅ Execution completed successfully' : '❌ Execution failed');
-      
+
     } else {
-      // Multiple agents execution
-      console.log(`🚀 Executing task with ${agents.length} agents in parallel:`);
-      agents.forEach((agent, index) => {
-        console.log(`   ${index + 1}. @${agent}`);
+      // Multiple tasks execution (parallel)
+      console.log(`🚀 Executing ${parsedTasks.length} tasks in parallel:`);
+      parsedTasks.forEach((pt, index) => {
+        console.log(`   ${index + 1}. @${pt.agentId}: ${pt.task.substring(0, 50)}${pt.task.length > 50 ? '...' : ''}`);
       });
       console.log('────────────────────────────────────────────────────────────');
       console.log('');
-      
-      const tasks = agents.map(agentId => ({
-        agentId,
-        task,
+
+      const tasks = parsedTasks.map(pt => ({
+        agentId: pt.agentId,
+        task: pt.task,
         projectPath: process.cwd(),
         context: contextFromPipe
       }));
-      
+
       const result = await codeCrewTool.executeAgentParallel({ tasks });
       
       // Format and display results

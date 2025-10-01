@@ -144,11 +144,8 @@ Started: ${timestamp}
       this.appendTaskLog(taskId, 'INFO', `Starting ${this.name} query mode`);
       this.appendTaskLog(taskId, 'INFO', `Prompt length: ${prompt.length} characters`);
       
-      // Log prompt content (first 500 chars or full)
-      const promptPreview = prompt.length > 500 ? 
-        prompt.substring(0, 500) + '...[truncated]' : 
-        prompt;
-      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${promptPreview}`);
+      // Log prompt content (entire content for debugging)
+      this.appendTaskLog(taskId, 'INFO', `Prompt content:\n${prompt}`);
 
       this.logger.log(`Executing ${this.name} with prompt (length: ${prompt.length})`);
 
