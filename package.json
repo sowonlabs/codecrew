@@ -34,6 +34,8 @@
   },
   "scripts": {
     "build": "nest build",
+    "postbuild": "node -e \"const fs = require('fs'); const content = fs.readFileSync('dist/main.js', 'utf8'); if (!content.startsWith('#!')) { fs.writeFileSync('dist/main.js', '#!/usr/bin/env node\\n' + content); console.log('✅ Added shebang to dist/main.js'); }\"",
+    "build:install": "npm run build && npm install -g .",
     "start": "node dist/main.js",
     "start:mcp": "node dist/main.js mcp",
     "start:slack": "dotenv -e .env.slack -- node dist/main.js slack --log",
@@ -66,6 +68,7 @@
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
     "chalk": "^4.1.2",
+    "execa": "^8.0.1",
     "fast-glob": "^3.3.0",
     "handlebars": "^4.7.8",
     "ignore": "^5.2.0",

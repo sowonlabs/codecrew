@@ -287,7 +287,7 @@ export class DocumentLoaderService {
       content = doc.content;
     }
 
-    return DocumentManager.extractToc(content, maxDepth);
+    return await DocumentManager.extractToc(content, maxDepth);
   }
 
   /**
@@ -312,7 +312,7 @@ export class DocumentLoaderService {
       content = doc.content;
     }
 
-    return DocumentManager.selectSection(content, selector);
+    return await DocumentManager.selectSection(content, selector);
   }
 
   /**

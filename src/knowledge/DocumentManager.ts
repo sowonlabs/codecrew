@@ -9,12 +9,23 @@
  * @see https://github.com/sowonlabs/sowonflow
  */
 
-import remarkParse from 'remark-parse';
-import remarkStringify from 'remark-stringify';
-import { unified } from 'unified';
-import { visit } from 'unist-util-visit';
 import type { Node } from 'unist';
 import type { Root, RootContent } from 'mdast';
+
+// Lazy-loaded ESM modules
+let remarkParse: any;
+let remarkStringify: any;
+let unified: any;
+let visit: any;
+
+async function loadRemarkModules() {
+  if (!remarkParse) {
+    remarkParse = (await import('remark-parse')).default;
+    remarkStringify = (await import('remark-stringify')).default;
+    unified = (await import('unified')).unified;
+    visit = (await import('unist-util-visit')).visit;
+  }
+}
 
 export class DocumentManager {
   /**
@@ -30,13 +41,14 @@ export class DocumentManager {
    * ### Subsection 1.1
    * ## Section 2
    * `;
-   * const toc = DocumentManager.extractToc(markdown, 2);
+   * const toc = await DocumentManager.extractToc(markdown, 2);
    * // Returns:
    * // # Title
    * // ## Section 1
    * // ## Section 2
    */
-  static extractToc(markdown: string, maxDepth: number = 3): string {
+  static async extractToc(markdown: string, maxDepth: number = 3): Promise<string> {
+    await loadRemarkModules();
     const normalized = markdown.replace(/^[ \t]+/gm, '').trim();
     const tree = unified().use(remarkParse).parse(normalized);
     const toc: string[] = [];
@@ -66,11 +78,12 @@ export class DocumentManager {
    * @returns Selected section as markdown string, or undefined if not found
    * 
    * @example
-   * const section = DocumentManager.selectSection(markdown, 'Installation');
-   * const section2 = DocumentManager.selectSection(markdown, '## Getting Started');
-   * const section3 = DocumentManager.selectSection(markdown, '#api-reference');
+   * const section = await DocumentManager.selectSection(markdown, 'Installation');
+   * const section2 = await DocumentManager.selectSection(markdown, '## Getting Started');
+   * const section3 = await DocumentManager.selectSection(markdown, '#api-reference');
    */
-  static selectSection(markdown: string, selector: string): string | undefined {
+  static async selectSection(markdown: string, selector: string): Promise<string | undefined> {
+    await loadRemarkModules();
     if (!selector) return undefined;
 
     const tree = unified().use(remarkParse).parse(markdown);
