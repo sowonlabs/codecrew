@@ -94,7 +94,7 @@ Slack App을 생성하고 3개의 토큰을 발급받아 CodeCrew Bot을 연동�
 6. **⚠️ 이 토큰을 복사해서 저장하세요!**
 
 ```
-예시: xoxb-1234567890-1234567890123-abcdefghijklmnopqrstuvwx
+예시: xoxb-XXXXXXXXXXXX-XXXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 ---
