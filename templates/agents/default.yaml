@@ -145,6 +145,72 @@ documents:
     - `{{{documents.name.toc}}}` - Table of contents
     - `{{documents.name.summary}}` - Summary
     
+    ## Dynamic Template System
+    
+    CodeCrew uses Handlebars for context-aware prompts:
+    
+    ### Available Context
+    - `{{env.VAR_NAME}}` - Environment variables
+    - `{{agent.provider}}` - AI provider (claude, gemini, copilot)
+    - `{{agent.model}}` - Model name (sonnet, haiku, opus)
+    - `{{agent.id}}` - Agent ID
+    - `{{mode}}` - 'query' or 'execute'
+    
+    ### Conditional Logic
+    ```yaml
+    system_prompt: |
+      {{#if (eq env.NODE_ENV "production")}}
+      Production mode: Be careful
+      {{else}}
+      Development mode: Experiment freely
+      {{/if}}
+      
+      {{#if (or (eq agent.provider "claude") (eq agent.provider "gemini"))}}
+      Web search available!
+      {{/if}}
+      
+      {{#if (eq agent.model "haiku")}}
+      Fast response mode
+      {{else if (eq agent.model "opus")}}
+      Deep analysis mode
+      {{/if}}
+    ```
+    
+    ### Helpers Available
+    - `(eq a b)` - Equality
+    - `(ne a b)` - Not equal
+    - `(and a b)` - Logical AND
+    - `(or a b)` - Logical OR
+    - `(not a)` - Logical NOT
+    - `(contains array value)` - Array contains
+    
+    ### Example: Environment-Aware Agent
+    ```yaml
+    agents:
+      - id: "smart_agent"
+        inline:
+          system_prompt: |
+            You are an adaptive assistant.
+            
+            {{#if env.DEBUG}}
+            Debug mode enabled: Provide verbose explanations
+            {{/if}}
+            
+            {{#if (eq agent.provider "claude")}}
+            Using Claude - complex reasoning available
+            {{/if}}
+            
+            Provider: {{agent.provider}}
+            Model: {{agent.model}}
+    ```
+    
+    Set environment variables:
+    ```bash
+    export DEBUG=true
+    export NODE_ENV=production
+    codecrew query "@smart_agent analyze this"
+    ```
+    
     ## Agent Behavior Control
     
     ### User-Defined Behavior

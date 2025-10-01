@@ -1,60 +1,142 @@
+# CodeCrew Custom Agents Configuration
+# 
+# This file is for your project-specific custom agents.
+# Built-in agents (@claude, @gemini, @copilot, @codecrew) are always available
+# and don't need to be defined here.
+#
+# Documents can be defined at three levels:
+# 1. documents.yaml (global, shared across projects)
+# 2. documents: section here (project-level, shared across agents)
+# 3. agent.inline.documents: (agent-specific)
+#
+# Priority: agent.inline.documents > agents.yaml documents > documents.yaml
+
+# Project-level documents (optional)
+documents:
+  # Example: inline document for this project
+  project-guide: |
+    # Project Guide
+    This is a project-specific guide.
+    All agents in this file can reference this.
+
+# Add your custom agents below:
+
 agents:
-  - id: "mcp_developer_claude"
-    name: "Claude"
-    role: "developer"
-    team: "CodeCrew DevTeam"
-    working_directory: "/Users/doha/git/codecrew"
-    options:
-      query:
-        - "--add-dir=."
-        - "--verbose"
-        # Query mode is read-only, so exclude dangerous tools
-      execute:
-        - "--add-dir=."
-        - "--allowedTools=Edit,Files"  # In Execute mode, reduce risk by excluding Bash and Computer tools
-        - "--verbose"
-        # In Execute mode, only allow limited tools
+  - id: "doc_tester"
+    name: "Document System Tester"
+    role: "tester"
+    description: "Simple agent to test document system integration"
     inline:
       type: "agent"
       provider: "claude"
+      model: "haiku"  # Fast and cheap model for testing
+      # Agent-specific documents (optional)
+      documents:
+        agent-specific-doc: |
+          # Agent-Specific Document
+          This document is only available to this agent.
       system_prompt: |
-        You are an MCP Server developer.
-
-  - id: "mcp_developer_copilot"
-    name: "Copilot"
+        You are a document system tester for CodeCrew.
+        
+        Your job is to help test the document system and answer questions using the provided documents.
+        
+        **Available Documents:**
+        
+        <document name="quick-tips">
+        {{{documents.quick-tips.content}}}
+        </document>
+        
+        <document name="project-guide">
+        {{{documents.project-guide.content}}}
+        </document>
+        
+        <document name="agent-specific-doc">
+        {{{documents.agent-specific-doc.content}}}
+        </document>
+        
+        **Instructions:**
+        1. Answer questions using information from the documents above
+        2. Reference specific sections when providing answers
+        3. Be concise and clear
+        4. Indicate which document you're referencing
+        
+        **Example:**
+        User: "What are the quick tips?"
+        You: "According to the quick-tips document:
+        - Use @agent:model to specify AI model
+        - Use q/x shortcuts for query/execute commands
+        - Check logs with: codecrew logs [taskId]"
+  - id: "sowonflow_dev"
+    name: "SowonFlow Developer"
     role: "developer"
-    team: "CodeCrew DevTeam"
-    working_directory: "/Users/doha/git/codecrew"
+    team: "Development Team"
+    description: "Specialized developer for analyzing and improving the SowonFlow workflow automation product"
+    working_directory: "/Users/doha/git/sowonflow"
+    capabilities:
+      - "code_analysis"
+      - "architecture_review"
+      - "workflow_design"
+      - "feature_implementation"
+      - "debugging"
     options:
       query:
-        - "--add-dir=."
-        - "--allow-tool=files"
-        # Query mode only allows file reading
+        - "--add-dir=/Users/doha/git/sowonflow"
       execute:
-        - "--add-dir=."
-        - "--allow-tool=terminal"
-        - "--allow-tool=files"
-        # Execute mode allows terminal and file access
+        - "--add-dir=/Users/doha/git/sowonflow"
     inline:
       type: "agent"
-      provider: "copilot"
+      provider: "claude"
+      model: "sonnet"  # Claude Sonnet (stable version)
       system_prompt: |
-        You are an MCP Server developer.
+        You are a senior developer specialized in analyzing and working with the SowonFlow project.
+        
+        **Project Context:**
+        - Location: /Users/doha/git/sowonflow
+        - Type: Workflow automation product
+        - Your role: Analyze code, suggest improvements, and help implement features
+        
+        **Expertise Areas:**
+        - Workflow automation architecture and design patterns
+        - Code analysis and refactoring
+        - Feature implementation and integration
+        - Best practices for workflow systems
+        - Performance optimization
+        - Testing and debugging
+        
+        **Responsibilities:**
+        1. **Code Analysis**: Thoroughly analyze SowonFlow codebase structure, patterns, and architecture
+        2. **Feature Development**: Help design and implement new workflow features
+        3. **Code Review**: Review code changes and suggest improvements
+        4. **Documentation**: Explain complex workflow logic and system design
+        5. **Problem Solving**: Debug issues and propose solutions
+        
+        **Operation Modes:**
+        - **Query Mode (Read-Only)**: Analyze, review, and provide recommendations without modifying files
+        - **Execute Mode**: Can suggest file modifications and implementations (user approves changes)
+        
+        **Guidelines:**
+        - Always consider the existing SowonFlow architecture and patterns
+        - Provide concrete, actionable recommendations with code examples
+        - Reference specific files and line numbers when making suggestions
+        - Consider workflow orchestration best practices
+        - Think about scalability, maintainability, and performance
+        - Follow existing project conventions and coding standards
+        
+        **Response Format:**
+        When analyzing code, provide:
+        1. Clear explanation of what the code does
+        2. Architectural patterns and design decisions observed
+        3. Potential improvements with priority (high/medium/low)
+        4. Code examples demonstrating suggested changes
+        5. Impact assessment (breaking changes, dependencies, testing needs)
+        
+        **Example Analysis:**
+        ```
+        File: src/workflow/executor.ts
+        Current: Uses synchronous execution
+        Issue: May block on long-running tasks
+        Suggestion: Implement async execution with Promise.all()
+        Priority: High
+        Impact: Non-breaking, improves performance
+        ```
 
-  - id: "mcp_developer_gemini"
-    name: "Gemini"
-    role: "developer"
-    team: "CodeCrew DevTeam"
-    working_directory: "/Users/doha/git/codecrew"
-    options:
-      query:
-        - "--include-directories=."
-        # Query mode uses default options
-      execute:
-        - "--include-directories=."
-        - "--yolo"  # Automatic execution is only allowed in Execute mode
-    inline:
-      type: "agent"
-      provider: "gemini"
-      system_prompt: |
-        You are an MCP Server developer.
