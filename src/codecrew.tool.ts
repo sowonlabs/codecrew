@@ -3,6 +3,7 @@ import { McpTool } from '@sowonai/nestjs-mcp-adapter';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { AIService } from './ai.service';
 import { AIProviderService } from './ai-provider.service';
 import { ProjectService } from './project.service';
@@ -19,6 +20,14 @@ import type { TemplateContext } from './utils/template-processor';
 @Injectable()
 export class CodeCrewTool {
   private readonly logger = new Logger(CodeCrewTool.name);
+  
+  /**
+   * Generate a random security key for prompt injection protection
+   * @returns Random 16-character hexadecimal string
+   */
+  private generateSecurityKey(): string {
+    return crypto.randomBytes(8).toString('hex');
+  }
   
   constructor(
     private readonly aiService: AIService,
@@ -801,22 +810,59 @@ Execution Mode: Implementation guidance could not be provided.`
         throw new Error('Invalid template: missing agents array');
       }
       
-      return config.agents.map((agent: any) => ({
-        id: agent.id,
-        name: agent.name || agent.id,
-        role: agent.role || 'AI Agent',
-        team: agent.team,
-        provider: agent.inline?.provider || agent.provider || 'claude',
-        workingDirectory: agent.working_directory || './',
-        capabilities: agent.capabilities || [],
-        description: agent.inline?.system_prompt ? 
-          this.extractDescription(agent.inline.system_prompt) : 
-          `${agent.name || agent.id} agent`,
-        specialties: agent.specialties || [],
-        systemPrompt: agent.inline?.system_prompt,
-        options: agent.options || [],
-        inline: agent.inline
+      // Initialize DocumentLoaderService with built-in documents
+      const path = await import('path');
+      const projectPath = path.dirname(process.env.AGENTS_CONFIG || 'agents.yaml');
+      await this.documentLoaderService.initialize(projectPath, config.documents);
+      
+      // Process templates
+      const { processDocumentTemplate } = await import('./utils/template-processor');
+      const processedAgents = await Promise.all(config.agents.map(async (agent: any) => {
+        let systemPrompt = agent.inline?.system_prompt;
+        
+        // Process system_prompt template with documents and context
+        if (systemPrompt) {
+          // Generate unique security key for prompt injection protection
+          const securityKey = this.generateSecurityKey();
+          
+          // Build template context
+          const templateContext: TemplateContext = {
+            env: process.env,
+            agent: {
+              id: agent.id,
+              name: agent.name || agent.id,
+              provider: agent.provider || agent.inline?.provider || 'claude',
+              model: agent.inline?.model,
+              workingDirectory: agent.working_directory || agent.workingDirectory || './',
+            },
+            vars: {
+              security_key: securityKey,
+            },
+          };
+          
+          systemPrompt = await processDocumentTemplate(systemPrompt, this.documentLoaderService, templateContext);
+          this.logger.debug(`Processed template for built-in agent: ${agent.id}`);
+        }
+        
+        return {
+          id: agent.id,
+          name: agent.name || agent.id,
+          role: agent.role || 'AI Agent',
+          team: agent.team,
+          provider: agent.inline?.provider || agent.provider || 'claude',
+          workingDirectory: agent.working_directory || './',
+          capabilities: agent.capabilities || [],
+          description: systemPrompt ? 
+            this.extractDescription(systemPrompt) : 
+            `${agent.name || agent.id} agent`,
+          specialties: agent.specialties || [],
+          systemPrompt: systemPrompt,
+          options: agent.options || [],
+          inline: agent.inline
+        };
       }));
+      
+      return processedAgents;
       
     } catch (error) {
       this.logger.error('Failed to load built-in agents from template:', getErrorMessage(error));

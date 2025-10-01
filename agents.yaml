@@ -22,6 +22,41 @@ documents:
 # Add your custom agents below:
 
 agents:
+  - id: "env_test"
+    name: "Environment Variable Tester"
+    role: "tester"
+    description: "Test agent to verify environment variable integration"
+    inline:
+      type: "agent"
+      provider: "claude"
+      model: "haiku"
+      system_prompt: |
+        You are an environment variable test agent.
+        
+        **Environment Variables Test:**
+        
+        TEST_VAR: {{env.TEST_VAR}}
+        NODE_ENV: {{env.NODE_ENV}}
+        CUSTOM_MESSAGE: {{env.CUSTOM_MESSAGE}}
+        
+        {{#if env.TEST_VAR}}
+        ✅ TEST_VAR is set to: {{env.TEST_VAR}}
+        {{else}}
+        ❌ TEST_VAR is not set
+        {{/if}}
+        
+        {{#if (eq env.NODE_ENV "production")}}
+        🔴 Running in PRODUCTION mode
+        {{else if (eq env.NODE_ENV "development")}}
+        🟢 Running in DEVELOPMENT mode
+        {{else}}
+        🟡 NODE_ENV: {{env.NODE_ENV}}
+        {{/if}}
+        
+        **Your Task:**
+        When asked, report what environment variables you can see.
+        List all the env vars mentioned above and their values.
+
   - id: "doc_tester"
     name: "Document System Tester"
     role: "tester"

@@ -62,6 +62,9 @@ export async function processDocumentTemplate(
     vars: additionalContext?.vars || {},
   };
 
+  // Register Handlebars helpers for advanced conditions
+  registerHandlebarsHelpers();
+
   // Extract document references from template
   // Pattern: {{{documents.doc-name.property}}}
   const pattern = /{{{documents\.([^.}]+)\.([^}]+)}}}/g;
@@ -73,9 +76,22 @@ export async function processDocumentTemplate(
     
     // Load all referenced documents
     for (const docName of docNames) {
-      const content = await documentLoader.getDocumentContent(docName);
+      let content = await documentLoader.getDocumentContent(docName);
       const toc = await documentLoader.getDocumentToc(docName);
       const summary = await documentLoader.getDocumentSummary(docName);
+      
+      // Process document content as template to support nested variables
+      // This allows documents to use {{agent.xxx}}, {{env.xxx}}, etc.
+      if (content) {
+        try {
+          const docTemplate = Handlebars.compile(content, { noEscape: true });
+          content = docTemplate(context);
+        } catch (error) {
+          // If document content has invalid Handlebars syntax, use as-is
+          // Silently ignore template errors in document content
+          // (documents may contain literal {{...}} examples that aren't meant to be processed)
+        }
+      }
       
       // Normalize docName for object key (replace hyphens with underscores if needed)
       const normalizedName = docName;
@@ -88,10 +104,7 @@ export async function processDocumentTemplate(
     }
   }
 
-  // Register Handlebars helpers for advanced conditions
-  registerHandlebarsHelpers();
-
-  // Compile and render template
+  // Compile and render main template
   const compiledTemplate = Handlebars.compile(template, { noEscape: true });
   return compiledTemplate(context);
 }

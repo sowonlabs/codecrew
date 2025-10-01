@@ -39,16 +39,17 @@ export class CopilotProvider extends BaseAIProvider {
     stderr: string,
     stdout: string,
   ): { error: boolean; message: string } {
-    const errorMessage = stderr || stdout;
+    // Use combinedOutput for quota and auth checks (these can appear in stdout or stderr)
+    const combinedOutput = stderr || stdout;
 
-    if (errorMessage.includes('quota') && errorMessage.includes('exceed')) {
+    if (combinedOutput.includes('quota') && combinedOutput.includes('exceed')) {
       return {
         error: true,
         message:
           'Copilot quota exceeded. Please check your plan at https://github.com/features/copilot/plans or try again later.',
       };
     }
-    if (errorMessage.includes('quota_exceeded')) {
+    if (combinedOutput.includes('quota_exceeded')) {
       return {
         error: true,
         message:
@@ -56,8 +57,8 @@ export class CopilotProvider extends BaseAIProvider {
       };
     }
     if (
-      errorMessage.toLowerCase().includes('auth') ||
-      errorMessage.toLowerCase().includes('login')
+      combinedOutput.toLowerCase().includes('auth') ||
+      combinedOutput.toLowerCase().includes('login')
     ) {
       return {
         error: true,
@@ -65,9 +66,11 @@ export class CopilotProvider extends BaseAIProvider {
           'Copilot CLI authentication is required. Please authenticate using the `copilot login` command.',
       };
     }
+    // Network error check: ONLY check stderr, NOT stdout
+    // stdout contains the AI response which may legitimately mention "network" or "connection"
     if (
-      errorMessage.toLowerCase().includes('network') ||
-      errorMessage.toLowerCase().includes('connection')
+      stderr && (stderr.toLowerCase().includes('network') ||
+      stderr.toLowerCase().includes('connection'))
     ) {
       return {
         error: true,

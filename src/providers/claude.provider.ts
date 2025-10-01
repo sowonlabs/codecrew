@@ -35,11 +35,11 @@ export class ClaudeProvider extends BaseAIProvider {
     // We check stderr first, as it's more likely to contain actual error messages.
     // Be careful not to treat normal response content as errors.
     
-    const errorMessage = stderr || stdout;
+    const combinedOutput = stderr || stdout; // Only for session limit check
 
     // Check for session limit (definite error)
-    if (errorMessage.includes('Session limit reached')) {
-      const resetMatch = errorMessage.match(/resets (\d+(?::\d+)?(?:am|pm))/i);
+    if (combinedOutput.includes('Session limit reached')) {
+      const resetMatch = combinedOutput.match(/resets (\d+(?::\d+)?(?:am|pm))/i);
       const resetTime = resetMatch ? resetMatch[1] : 'later today';
       return {
         error: true,
@@ -57,8 +57,9 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
-    // Check for network errors
-    if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+    // Check for network errors - ONLY in stderr, NOT in stdout (which contains AI response)
+    // stdout may contain words like "network" or "connection" in legitimate responses
+    if (stderr && (stderr.includes('network') || stderr.includes('connection'))) {
       return {
         error: true,
         message:
