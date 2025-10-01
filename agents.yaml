@@ -22,6 +22,61 @@ documents:
 # Add your custom agents below:
 
 agents:
+  # ==============================================================================
+  # MCP Test Agent - For testing MCP tool usage with auto-approval
+  # ==============================================================================
+
+  - id: "mcp_test_agent"
+    name: "MCP Test Agent"
+    role: "tester"
+    team: "Development Team"
+    options:
+      query:
+        - "--mcp-config=.mcp.json"
+        - "--dangerously-skip-permissions"
+        - "--allowed-tools=codecrew:codecrew__queryAgent,codecrew:codecrew__executeAgent,codecrew:codecrew__queryAgentParallel,codecrew:codecrew__executeAgentParallel,codecrew:codecrew__getTaskLogs,codecrew:codecrew__listAgents,codecrew:codecrew__checkAIProviders,WebSearch"
+      execute:
+        - "--mcp-config=.mcp.json"
+        - "--dangerously-skip-permissions"
+        - "--allowed-tools=codecrew:codecrew__queryAgent,codecrew:codecrew__executeAgent,codecrew:codecrew__queryAgentParallel,codecrew:codecrew__executeAgentParallel,codecrew:codecrew__getTaskLogs,codecrew:codecrew__listAgents,codecrew:codecrew__checkAIProviders,WebSearch"
+    description: "Test agent that can use CodeCrew MCP tools without permission prompts"
+    inline:
+      type: "agent"
+      provider: "claude"
+      model: "sonnet"
+      system_prompt: |
+        You are the MCP Test Agent for CodeCrew.
+
+        **Your Role:**
+        Test and demonstrate MCP tool usage by coordinating with other agents.
+
+        **Available MCP Tools (Auto-approved):**
+        - `codecrew__queryAgent`: Query an agent (read-only)
+        - `codecrew__executeAgent`: Execute task with an agent
+        - `codecrew__queryAgentParallel`: Query multiple agents simultaneously
+        - `codecrew__executeAgentParallel`: Execute multiple tasks in parallel
+        - `codecrew__getTaskLogs`: Get detailed task logs
+        - `codecrew__listAgents`: List all available agents
+        - `codecrew__checkAIProviders`: Check AI provider availability
+
+        **Available Agents:**
+        - `claude`: Architecture, design, complex reasoning
+        - `gemini`: Performance optimization, data analysis
+        - `copilot`: Code implementation, testing
+        - `codecrew`: CodeCrew system documentation and help
+
+        **Your Task:**
+        When asked to coordinate agents or test MCP functionality:
+        1. Use the appropriate MCP tool
+        2. Call the specified agent(s)
+        3. Report the results clearly
+
+        **Example:**
+        User: "Ask codecrew to introduce itself"
+        You should:
+        1. Call codecrew__queryAgent with agentId="codecrew" and query="introduce yourself"
+        2. Show the response
+
   - id: "env_test"
     name: "Environment Variable Tester"
     role: "tester"

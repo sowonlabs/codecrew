@@ -7,6 +7,8 @@ import { StderrLogger } from './stderr.logger';
 import { SERVER_NAME } from './constants';
 import { getErrorMessage, getErrorStack } from './utils/error-utils';
 import { CLIHandler } from './cli/cli.handler';
+import { SlackBot } from './slack/slack-bot';
+import { CodeCrewTool } from './codecrew.tool';
 
 const logger = new Logger('Bootstrap');
 const args = parseCliOptions();
@@ -140,6 +142,50 @@ async function runCli() {
   }
 }
 
+async function runSlackBot() {
+  try {
+    logger.log('Starting Slack Bot mode...');
+
+    // Validate environment variables
+    if (!process.env.SLACK_BOT_TOKEN) {
+      throw new Error('SLACK_BOT_TOKEN environment variable is required');
+    }
+    if (!process.env.SLACK_APP_TOKEN) {
+      throw new Error('SLACK_APP_TOKEN environment variable is required');
+    }
+    if (!process.env.SLACK_SIGNING_SECRET) {
+      throw new Error('SLACK_SIGNING_SECRET environment variable is required');
+    }
+
+    // Create application context
+    const app = await NestFactory.createApplicationContext(AppModule.forRoot(args), {
+      logger: args.log ? new StderrLogger('CodeCrewSlack', { timestamp: true }) : false,
+    });
+
+    // Get CodeCrewTool from context
+    const codeCrewTool = app.get(CodeCrewTool);
+
+    // Create and start Slack Bot
+    const slackBot = new SlackBot(codeCrewTool);
+    await slackBot.start();
+
+    // Handle shutdown
+    const cleanup = async () => {
+      logger.log('Shutting down Slack Bot...');
+      await slackBot.stop();
+      await app.close();
+      process.exit(0);
+    };
+
+    process.on('SIGTERM', cleanup);
+    process.on('SIGINT', cleanup);
+
+  } catch (error) {
+    logger.error(`Slack Bot failed: ${getErrorMessage(error)}`, getErrorStack(error));
+    process.exit(1);
+  }
+}
+
 // Main application routing logic
 async function main() {
   if (args.install) {
@@ -149,6 +195,10 @@ async function main() {
     // Explicit MCP Server mode
     if (args.log) logger.log('Starting MCP server mode...');
     await bootstrap();
+  } else if (args.command === 'slack') {
+    // Slack Bot mode
+    if (args.log) logger.log('Starting Slack Bot mode...');
+    await runSlackBot();
   } else if (!args.command) {
     // No command specified - show help
     if (args.log) logger.log('Starting CLI mode (help)...');
