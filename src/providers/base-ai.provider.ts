@@ -72,10 +72,26 @@ export abstract class BaseAIProvider implements AIProvider {
 
     try {
       const cliCommand = this.getCliCommand();
-      const path = execSync(`which ${cliCommand}`, { encoding: 'utf-8' }).trim();
-      this.logger.log(`✅ Found ${this.name} CLI at: ${path}`);
-      this.cachedPath = path;
-      return path;
+      // Use 'where' on Windows, 'which' on Unix-like systems
+      const isWindows = process.platform === 'win32';
+      const command = isWindows ? `where ${cliCommand}` : `which ${cliCommand}`;
+      const path = execSync(command, { encoding: 'utf-8' }).trim();
+      
+      // Windows 'where' returns multiple lines if there are multiple matches
+      // Prefer executables with extensions (.cmd, .exe, .bat, .ps1) over extensionless files
+      let finalPath: string;
+      if (isWindows) {
+        const paths = path.split('\n').map(p => p.trim()).filter(p => p);
+        // Find first path with a known executable extension
+        const pathWithExt = paths.find(p => /\.(cmd|exe|bat|ps1)$/i.test(p));
+        finalPath = pathWithExt || paths[0] || '';
+      } else {
+        finalPath = path;
+      }
+      
+      this.logger.log(`✅ Found ${this.name} CLI at: ${finalPath}`);
+      this.cachedPath = finalPath;
+      return finalPath;
     } catch (error: any) {
       this.logger.error(`❌ ${this.name} not found in PATH: ${error.message}`);
       this.cachedPath = '';
@@ -114,18 +130,9 @@ Started: ${timestamp}
 
   async query(prompt: string, options: AIQueryOptions = {}): Promise<AIResponse> {
     const taskId = options.taskId || `${this.name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const toolPath = await this.getToolPath();
     
-    if (!toolPath) {
-      return {
-        content: '',
-        provider: this.name,
-        command: `${this.getCliCommand()} (not found)`,
-        success: false,
-        error: this.getNotInstalledMessage(),
-        taskId,
-      };
-    }
+    // Use command name directly - let the shell find it in PATH
+    const executablePath = this.getCliCommand();
 
     try {
       let args = [
@@ -155,78 +162,43 @@ Started: ${timestamp}
 
       this.logger.log(`Executing ${this.name} with prompt (length: ${prompt.length})`);
 
-      return new Promise((resolve, reject) => {
-        const child = spawn(toolPath, args, {
+      return new Promise((resolve) => {
+        // Use command name directly with shell: true for cross-platform execution
+        const child = spawn(executablePath, args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.workingDirectory || process.cwd(),
           env: process.env,
+          shell: true, // Let shell handle .cmd/.bat files on Windows
         });
 
         let stdout = '';
         let stderr = '';
         let exitCode: number | null = null;
 
-        // stdout 완료 Promise
-        const stdoutPromise = new Promise<void>((resolveStdout) => {
-          child.stdout.on('data', (data) => {
-            const output = data.toString();
-            stdout += output;
-            this.appendTaskLog(taskId, 'STDOUT', output);
-          });
-          child.stdout.on('end', () => resolveStdout());
+        child.stdout.on('data', (data: any) => {
+          const output = data.toString();
+          stdout += output;
+          this.appendTaskLog(taskId, 'STDOUT', output);
         });
 
-        // stderr 완료 Promise
-        const stderrPromise = new Promise<void>((resolveStderr) => {
-          child.stderr.on('data', (data) => {
-            const output = data.toString();
-            stderr += output;
-            this.appendTaskLog(taskId, 'STDERR', output);
-          });
-          child.stderr.on('end', () => resolveStderr());
+        child.stderr.on('data', (data: any) => {
+          const output = data.toString();
+          stderr += output;
+          this.appendTaskLog(taskId, 'STDERR', output);
         });
 
-        // close 이벤트 Promise
-        const closePromise = new Promise<number | null>((resolveClose) => {
-          child.on('close', (code) => {
-            exitCode = code;
-            resolveClose(code);
-          });
-        });
-
-        const timeout = setTimeout(() => {
-          this.appendTaskLog(taskId, 'ERROR', `Process timeout after ${options.timeout || 600000}ms`);
-          child.kill('SIGTERM');
-          resolve({
-            content: '',
-            provider: this.name,
-            command,
-            success: false,
-            error: `${this.name} CLI response timeout`,
-            taskId,
-          });
-        }, options.timeout || 600000);
-
-        // 모든 이벤트가 완료될 때까지 대기
-        Promise.all([stdoutPromise, stderrPromise, closePromise]).then(() => {
-          clearTimeout(timeout);
+        child.on('close', (code: any) => {
+          exitCode = code;
           this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${exitCode}`);
-          this.appendTaskLog(taskId, 'INFO', `STDOUT length: ${stdout.length} bytes`);
 
           if (stderr) {
             this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
 
-          // Handle failure if exit code is non-zero or provider detects an error
-          // NOTE: We check providerError even when code === 0 because some CLI tools
-          // incorrectly return exit code 0 even when they encounter errors.
-          // The parseProviderError method checks stderr/stdout for error patterns like
-          // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
           if (exitCode !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;
             this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed: ${errorMessage}`);
-            this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
             resolve({
               content: '',
               provider: this.name,
@@ -257,34 +229,45 @@ Started: ${timestamp}
             content: parsedContent,
             provider: this.name,
             command,
-            success: exitCode === 0,
+            success: true,
             taskId,
           });
         });
 
         child.on('error', (error: any) => {
-          clearTimeout(timeout);
           this.appendTaskLog(taskId, 'ERROR', `Process error: ${error.message}`);
           resolve({
             content: '',
             provider: this.name,
             command,
             success: false,
-            error: error.code === 'ENOENT' ?
-              this.getNotInstalledMessage() :
-              error.message,
+            error: error.code === 'ENOENT' ? this.getNotInstalledMessage() : error.message,
             taskId,
           });
         });
 
-        // Handle stdin - only if prompt is not included in args
+        // Send prompt via stdin if not in args
         if (!this.getPromptInArgs()) {
-          this.appendTaskLog(taskId, 'INFO', 'Sending prompt via stdin');
           child.stdin.write(prompt);
           child.stdin.end();
         } else {
-          child.stdin.end(); // Close stdin
+          child.stdin.end();
         }
+
+        // Timeout handling
+        const timeout = setTimeout(() => {
+          child.kill();
+          resolve({
+            content: '',
+            provider: this.name,
+            command,
+            success: false,
+            error: `${this.name} CLI timeout`,
+            taskId,
+          });
+        }, options.timeout || 600000);
+
+        child.on('close', () => clearTimeout(timeout));
       });
     } catch (error: any) {
       this.logger.error(`${this.name} execution failed: ${error.message}`, error.stack);
@@ -301,18 +284,9 @@ Started: ${timestamp}
 
   async execute(prompt: string, options: AIQueryOptions = {}): Promise<AIResponse> {
     const taskId = options.taskId || `${this.name}_execute_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const toolPath = await this.getToolPath();
     
-    if (!toolPath) {
-      return {
-        content: '',
-        provider: this.name,
-        command: `${this.getCliCommand()} execute (not found)`,
-        success: false,
-        error: this.getNotInstalledMessage(),
-        taskId,
-      };
-    }
+    // Use command name directly - let the shell find it in PATH
+    const executablePath = this.getCliCommand();
 
     try {
       let args = [
@@ -351,77 +325,42 @@ Started: ${timestamp}
       this.logger.log(`Executing ${this.name} in execute mode (length: ${prompt.length})`);
 
       return new Promise((resolve) => {
-        const child = spawn(toolPath, args, {
+        // Use command name directly with shell: true for cross-platform execution
+        const child = spawn(executablePath, args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.workingDirectory || process.cwd(),
           env: process.env,
+          shell: true, // Let shell handle .cmd/.bat files on Windows
         });
 
         let stdout = '';
         let stderr = '';
         let exitCode: number | null = null;
 
-        // stdout 완료 Promise
-        const stdoutPromise = new Promise<void>((resolveStdout) => {
-          child.stdout.on('data', (data) => {
-            const output = data.toString();
-            stdout += output;
-            this.appendTaskLog(taskId, 'STDOUT', output);
-          });
-          child.stdout.on('end', () => resolveStdout());
+        child.stdout.on('data', (data: any) => {
+          const output = data.toString();
+          stdout += output;
+          this.appendTaskLog(taskId, 'STDOUT', output);
         });
 
-        // stderr 완료 Promise
-        const stderrPromise = new Promise<void>((resolveStderr) => {
-          child.stderr.on('data', (data) => {
-            const output = data.toString();
-            stderr += output;
-            this.appendTaskLog(taskId, 'STDERR', output);
-          });
-          child.stderr.on('end', () => resolveStderr());
+        child.stderr.on('data', (data: any) => {
+          const output = data.toString();
+          stderr += output;
+          this.appendTaskLog(taskId, 'STDERR', output);
         });
 
-        // close 이벤트 Promise
-        const closePromise = new Promise<number | null>((resolveClose) => {
-          child.on('close', (code) => {
-            exitCode = code;
-            resolveClose(code);
-          });
-        });
-
-        const timeout = setTimeout(() => {
-          this.appendTaskLog(taskId, 'ERROR', `Process timeout after ${options.timeout || 1200000}ms`);
-          child.kill();
-          resolve({
-            content: '',
-            provider: this.name,
-            command,
-            success: false,
-            error: `${this.name} CLI execute timeout`,
-            taskId,
-          });
-        }, options.timeout || 1200000); // 20min default for execute mode
-
-        // 모든 이벤트가 완료될 때까지 대기
-        Promise.all([stdoutPromise, stderrPromise, closePromise]).then(() => {
-          clearTimeout(timeout);
+        child.on('close', (code: any) => {
+          exitCode = code;
           this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${exitCode}`);
-          this.appendTaskLog(taskId, 'INFO', `STDOUT length: ${stdout.length} bytes`);
 
           if (stderr) {
-            this.logger.warn(`[${taskId}] ${this.name} execute stderr: ${stderr}`);
+            this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
 
-          // Handle failure if exit code is non-zero or provider detects an error
-          // NOTE: We check providerError even when code === 0 because some CLI tools
-          // incorrectly return exit code 0 even when they encounter errors.
-          // The parseProviderError method checks stderr/stdout for error patterns like
-          // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
           if (exitCode !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;
-            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI execute failed: ${errorMessage}`);
-            this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
+            this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed: ${errorMessage}`);
             resolve({
               content: '',
               provider: this.name,
@@ -452,35 +391,45 @@ Started: ${timestamp}
             content: parsedContent,
             provider: this.name,
             command,
-            success: exitCode === 0,
+            success: true,
             taskId,
           });
         });
 
         child.on('error', (error: any) => {
-          clearTimeout(timeout);
           this.appendTaskLog(taskId, 'ERROR', `Process error: ${error.message}`);
           resolve({
             content: '',
             provider: this.name,
             command,
             success: false,
-            error: error.code === 'ENOENT' ?
-              this.getNotInstalledMessage() :
-              error.message,
+            error: error.code === 'ENOENT' ? this.getNotInstalledMessage() : error.message,
             taskId,
           });
         });
 
-        // Handle stdin - only if prompt is not included in args
+        // Send prompt via stdin if not in args
         if (!this.getPromptInArgs()) {
-          this.appendTaskLog(taskId, 'INFO', 'Sending prompt via stdin');
           child.stdin.write(prompt);
           child.stdin.end();
         } else {
-          this.appendTaskLog(taskId, 'INFO', 'Prompt included in command args');
-          child.stdin.end(); // Close stdin
+          child.stdin.end();
         }
+
+        // Timeout handling
+        const timeout = setTimeout(() => {
+          child.kill();
+          resolve({
+            content: '',
+            provider: this.name,
+            command,
+            success: false,
+            error: `${this.name} CLI execute timeout`,
+            taskId,
+          });
+        }, options.timeout || 1200000); // 20min default
+
+        child.on('close', () => clearTimeout(timeout));
       });
     } catch (error: any) {
       this.logger.error(`${this.name} execute failed: ${error.message}`, error.stack);
