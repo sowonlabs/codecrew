@@ -4,6 +4,7 @@ import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AIService } from './ai.service';
+import { AIProviderService } from './ai-provider.service';
 import { ProjectService } from './project.service';
 import { PREFIX_TOOL_NAME, SERVER_NAME } from './constants';
 import { AgentInfo } from './agent.types';
@@ -11,6 +12,9 @@ import { getErrorMessage, getErrorStack } from './utils/error-utils';
 import { ParallelProcessingService } from './services/parallel-processing.service';
 import { TaskManagementService } from './services/task-management.service';
 import { ResultFormatterService } from './services/result-formatter.service';
+import { TemplateService } from './services/template.service';
+import { DocumentLoaderService } from './services/document-loader.service';
+import type { TemplateContext } from './utils/template-processor';
 
 @Injectable()
 export class CodeCrewTool {
@@ -18,18 +22,14 @@ export class CodeCrewTool {
   
   constructor(
     private readonly aiService: AIService,
+    private readonly aiProviderService: AIProviderService,
     private readonly projectService: ProjectService,
     private readonly parallelProcessingService: ParallelProcessingService,
     private readonly taskManagementService: TaskManagementService,
     private readonly resultFormatterService: ResultFormatterService,
+    private readonly templateService: TemplateService,
+    private readonly documentLoaderService: DocumentLoaderService,
   ) {}
-
-
-
-
-
-
-
 
 
   @McpTool({
@@ -339,6 +339,7 @@ agents:
       query: z.string().describe('Question or request to ask the agent'),
       projectPath: z.string().describe('Absolute path of the project to analyze').optional(),
       context: z.string().describe('Additional context or background information').optional(),
+      model: z.string().describe('Model to use for this query (e.g., sonnet, gemini-2.5-pro, gpt-5)').optional(),
     },
     annotations: {
       title: 'Query Specialist Agent (Read-Only)',
@@ -350,6 +351,7 @@ agents:
     agentId: string;
     query: string;
     context?: string;
+    model?: string;
   }) {
     // Generate task ID and start tracking
     const taskId = this.taskManagementService.createTask({
@@ -361,10 +363,13 @@ agents:
     this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started query agent ${args.agentId}` });
 
     try {
-      const { agentId, query, context } = args;
+      const { agentId, query, context, model } = args;
       
       this.logger.log(`[${taskId}] Querying agent ${agentId}: ${query.substring(0, 50)}...`);
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
+      if (model) {
+        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Model: ${model}` });
+      }
 
       // Dynamically load agent configuration
       const agents = await this.loadAvailableAgents();
@@ -397,13 +402,8 @@ Please check the agent ID and try again.`
       const workingDir = agent.workingDirectory || process.cwd();
       let systemPrompt = agent.systemPrompt || agent.description || `You are an expert ${agentId}.`;
 
-      // Add read-only mode warning
+      // Add context information
       systemPrompt += `
-<IMPORTANT>
-You are in READ-ONLY ANALYSIS MODE. Do NOT suggest file modifications or code changes.
-Only provide analysis, explanations, reviews, and recommendations based on existing code.
-Focus on understanding and explaining rather than changing anything.
-</IMPORTANT>
 
 Specialties: ${agent.specialties?.join(', ') || 'General'}
 Capabilities: ${agent.capabilities?.join(', ') || 'Analysis'}
@@ -418,16 +418,26 @@ Query: ${query}`;
 
       // Use agent's AI provider - using queryAI wrapper
       let response;
-      const provider = agent.provider || 'claude';
+      let provider = agent.provider || 'claude';
+      
+      // Special handling for @codecrew agent: use fallback if no inline.model specified
+      if (agentId === 'codecrew' && !agent.inline?.model && !model) {
+        provider = await this.getAvailableProvider(agent.provider);
+        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+      }
       
       // Get mode-specific options for this agent (query mode)
       const agentOptions = this.getOptionsForAgent(agent, 'query');
+      
+      // Determine model to use (priority: runtime override > inline.model)
+      const modelToUse = model || agent.inline?.model;
       
       response = await this.aiService.queryAI(fullPrompt, provider, {
         workingDirectory: workingDir,
         timeout: 600000,
         additionalArgs: agentOptions, // Pass mode-specific options
         taskId, // Pass taskId to AIService
+        model: modelToUse, // Use determined model
       });
 
       // Handle task completion
@@ -503,6 +513,7 @@ Read-Only Mode: No files were modified.`
       task: z.string().describe('Task or implementation request for the agent to perform'),
       projectPath: z.string().describe('Absolute path of the project to work on').optional(),
       context: z.string().describe('Additional context or background information').optional(),
+      model: z.string().describe('Model to use for this execution (e.g., sonnet, gemini-2.5-pro, gpt-5)').optional(),
     },
     annotations: {
       title: 'Execute Agent Task (Can Modify Files)',
@@ -515,6 +526,7 @@ Read-Only Mode: No files were modified.`
     task: string;
     projectPath?: string;
     context?: string;
+    model?: string;
   }) {
     // Generate task ID and start tracking
     const taskId = this.taskManagementService.createTask({
@@ -526,10 +538,13 @@ Read-Only Mode: No files were modified.`
     this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started execute agent ${args.agentId}` });
 
     try {
-      const { agentId, task, projectPath, context } = args;
+      const { agentId, task, projectPath, context, model } = args;
       
       this.logger.log(`[${taskId}] Executing agent ${agentId}: ${task.substring(0, 50)}...`);
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Task: ${task.substring(0, 100)}...` });
+      if (model) {
+        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Model: ${model}` });
+      }
 
       // Dynamically load agent configuration
       const agents = await this.loadAvailableAgents();
@@ -561,14 +576,8 @@ Please check the agent ID and try again.`
       const workingDir = projectPath || agent.workingDirectory || './';
       let systemPrompt = agent.systemPrompt || agent.description || `You are an expert ${agentId}.`;
 
-      // Add execution mode settings
+      // Add context information
       systemPrompt += `
-<IMPORTANT>
-You can provide implementation guidance and suggest code changes.
-You have access to the working directory and can provide detailed implementation guidance.
-Focus on practical, actionable solutions for ${agent.specialties?.join(', ') || 'development'}.
-</IMPORTANT>
-
 Specialties: ${agent.specialties?.join(', ') || 'General'}
 Capabilities: ${agent.capabilities?.join(', ') || 'Implementation'}
 Working Directory: ${workingDir}`;
@@ -583,11 +592,21 @@ Task: ${task}
 
       // Use agent's AI provider (execution mode)
       let response;
-      const provider = agent.provider || 'claude';
+      let provider = agent.provider || 'claude';
+      
+      // Special handling for @codecrew agent: use fallback if no inline.model specified
+      if (agentId === 'codecrew' && !agent.inline?.model && !model) {
+        provider = await this.getAvailableProvider(agent.provider);
+        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+      }
+      
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using provider: ${provider}` });
       
       // Get mode-specific options for this agent (execute mode)
       const agentOptions = this.getOptionsForAgent(agent, 'execute');
+      
+      // Determine model to use (priority: runtime override > inline.model)
+      const modelToUse = model || agent.inline?.model;
       
       // Use new unified executeAI for all providers
       response = await this.aiService.executeAI(fullPrompt, provider, {
@@ -595,6 +614,7 @@ Task: ${task}
         timeout: provider === 'gemini' ? 1200000 : 600000, // 20min for Gemini, 10min for others
         taskId: taskId,
         additionalArgs: agentOptions, // Pass mode-specific options
+        model: modelToUse, // Use determined model
       });
 
       // Handle task completion
@@ -701,60 +721,148 @@ Execution Mode: Implementation guidance could not be provided.`
    */
   private async loadAvailableAgents(): Promise<AgentInfo[]> {
     try {
-      // Check agent configuration file path from environment variable or default
+      let allAgents: AgentInfo[] = [];
+      
+      // 1. Load built-in agents from template (cached or from GitHub)
+      this.logger.log('Loading built-in agents from template...');
+      try {
+        const builtInAgents = await this.loadBuiltInAgents();
+        allAgents = [...builtInAgents];
+        this.logger.log(`Loaded ${builtInAgents.length} built-in agents`);
+      } catch (error) {
+        this.logger.warn('Failed to load built-in agents, using fallback defaults');
+        // Fallback to hardcoded defaults if template loading fails
+        allAgents = this.getDefaultCliAgents();
+      }
+      
+      // 2. Load user-defined agents from agents.yaml (if exists)
       const agentsConfigPath = process.env.AGENTS_CONFIG || 'agents.yaml';
+      this.logger.log(`Loading user agents from config: ${agentsConfigPath}`);
       
-      let agents: AgentInfo[] = [];
-      
-      // Try to load from config file (environment or default agents.yaml)
-      this.logger.log(`Loading agents from config: ${agentsConfigPath}`);
-      agents = await this.loadAgentsFromConfig(agentsConfigPath);
-      
-      // Always add default CLI agents (@claude, @gemini, @copilot)
-      const defaultCliAgents: AgentInfo[] = [
-        {
-          id: 'claude',
-          name: 'Claude AI',
-          role: 'AI Assistant',
-          team: 'AI Team',
-          provider: 'claude',
-          workingDirectory: './',
-          capabilities: ['general_assistance', 'code_analysis', 'writing'],
-          description: 'Claude AI assistant for general tasks, code analysis, and writing assistance.',
-          specialties: ['General AI', 'Code Analysis', 'Writing', 'Problem Solving']
-        },
-        {
-          id: 'gemini',
-          name: 'Gemini AI',
-          role: 'AI Assistant',
-          team: 'AI Team',
-          provider: 'gemini',
-          workingDirectory: './',
-          capabilities: ['general_assistance', 'code_analysis', 'research'],
-          description: 'Gemini AI assistant for general tasks, code analysis, and research assistance.',
-          specialties: ['General AI', 'Code Analysis', 'Research', 'Data Analysis']
-        },
-        {
-          id: 'copilot',
-          name: 'GitHub Copilot',
-          role: 'AI Assistant',
-          team: 'AI Team',
-          provider: 'copilot',
-          workingDirectory: './',
-          capabilities: ['code_generation', 'code_completion', 'debugging'],
-          description: 'GitHub Copilot AI assistant for code generation, completion, and debugging.',
-          specialties: ['Code Generation', 'Code Completion', 'Debugging', 'GitHub Integration']
+      try {
+        const userAgents = await this.loadAgentsFromConfig(agentsConfigPath);
+        this.logger.log(`Loaded ${userAgents.length} user-defined agents`);
+        
+        // 3. Merge: user agents can override built-in agents with same ID
+        const builtInIds = new Set(allAgents.map(a => a.id));
+        const newUserAgents = userAgents.filter(a => !builtInIds.has(a.id));
+        const overrideUserAgents = userAgents.filter(a => builtInIds.has(a.id));
+        
+        // Replace built-in agents with user overrides
+        for (const userAgent of overrideUserAgents) {
+          const index = allAgents.findIndex(a => a.id === userAgent.id);
+          if (index >= 0) {
+            this.logger.log(`User config overrides built-in agent: ${userAgent.id}`);
+            allAgents[index] = userAgent;
+          }
         }
-      ];
-      
-      // Add default CLI agents to the list
-      agents = [...agents, ...defaultCliAgents];
+        
+        // Add new user agents
+        allAgents = [...allAgents, ...newUserAgents];
+        
+      } catch (error) {
+        this.logger.log('No user agents.yaml found or failed to load, using built-in agents only');
+      }
 
-      return agents;
+      this.logger.log(`Total agents loaded: ${allAgents.length}`);
+      return allAgents;
+      
     } catch (error) {
       this.logger.error('Failed to load agents:', getErrorMessage(error));
-      return [];
+      return this.getDefaultCliAgents(); // Ultimate fallback
     }
+  }
+
+  /**
+   * Load built-in agents from template service
+   */
+  private async loadBuiltInAgents(): Promise<AgentInfo[]> {
+    try {
+      let templateContent: string;
+      
+      // Try local template first
+      try {
+        const path = await import('path');
+        const fs = await import('fs/promises');
+        const templatePath = path.join(__dirname, '..', 'templates', 'agents', 'default.yaml');
+        templateContent = await fs.readFile(templatePath, 'utf-8');
+        this.logger.log('Loaded built-in agents from local template');
+      } catch (localError) {
+        // Fallback to GitHub download
+        this.logger.log('Local template not found, trying GitHub...');
+        templateContent = await this.templateService.downloadTemplate('default', 'main');
+        this.logger.log('Loaded built-in agents from GitHub template');
+      }
+      
+      const yaml = await import('js-yaml');
+      const config = yaml.load(templateContent) as any;
+      
+      if (!config.agents || !Array.isArray(config.agents)) {
+        throw new Error('Invalid template: missing agents array');
+      }
+      
+      return config.agents.map((agent: any) => ({
+        id: agent.id,
+        name: agent.name || agent.id,
+        role: agent.role || 'AI Agent',
+        team: agent.team,
+        provider: agent.inline?.provider || agent.provider || 'claude',
+        workingDirectory: agent.working_directory || './',
+        capabilities: agent.capabilities || [],
+        description: agent.inline?.system_prompt ? 
+          this.extractDescription(agent.inline.system_prompt) : 
+          `${agent.name || agent.id} agent`,
+        specialties: agent.specialties || [],
+        systemPrompt: agent.inline?.system_prompt,
+        options: agent.options || [],
+        inline: agent.inline
+      }));
+      
+    } catch (error) {
+      this.logger.error('Failed to load built-in agents from template:', getErrorMessage(error));
+      throw error;
+    }
+  }
+
+  /**
+   * Get default CLI agents as ultimate fallback
+   */
+  private getDefaultCliAgents(): AgentInfo[] {
+    return [
+      {
+        id: 'claude',
+        name: 'Claude AI',
+        role: 'AI Assistant',
+        team: 'AI Team',
+        provider: 'claude',
+        workingDirectory: './',
+        capabilities: ['general_assistance', 'code_analysis', 'writing'],
+        description: 'Claude AI assistant for general tasks, code analysis, and writing assistance.',
+        specialties: ['General AI', 'Code Analysis', 'Writing', 'Problem Solving']
+      },
+      {
+        id: 'gemini',
+        name: 'Gemini AI',
+        role: 'AI Assistant',
+        team: 'AI Team',
+        provider: 'gemini',
+        workingDirectory: './',
+        capabilities: ['general_assistance', 'code_analysis', 'research'],
+        description: 'Gemini AI assistant for general tasks, code analysis, and research assistance.',
+        specialties: ['General AI', 'Code Analysis', 'Research', 'Data Analysis']
+      },
+      {
+        id: 'copilot',
+        name: 'GitHub Copilot',
+        role: 'AI Assistant',
+        team: 'AI Team',
+        provider: 'copilot',
+        workingDirectory: './',
+        capabilities: ['code_generation', 'code_completion', 'debugging'],
+        description: 'GitHub Copilot AI assistant for code generation, completion, and debugging.',
+        specialties: ['Code Generation', 'Code Completion', 'Debugging', 'GitHub Integration']
+      }
+    ];
   }
 
   /**
@@ -764,6 +872,7 @@ Execution Mode: Implementation guidance could not be provided.`
     try {
       const { readFile } = await import('fs/promises');
       const yaml = await import('js-yaml');
+      const path = await import('path');
       
       this.logger.log(`Loading agents from config: ${configPath}`);
       
@@ -780,22 +889,73 @@ Execution Mode: Implementation guidance could not be provided.`
         throw new Error('Invalid config: missing agents array');
       }
 
+      // Initialize DocumentLoaderService with project-level documents from agents.yaml
+      const projectPath = path.dirname(configPath);
+      await this.documentLoaderService.initialize(projectPath, config.documents);
+      
+      // Process templates using the template-processor utility
+      const { processDocumentTemplate } = await import('./utils/template-processor');
+
       // Convert YAML config to MCP tool format
-      return config.agents.map((agent: any) => ({
-        id: agent.id,
-        name: agent.name || agent.id,
-        role: agent.role || 'AI Agent',
-        team: agent.team,
-        provider: agent.inline?.provider || 'claude',
-        workingDirectory: agent.working_directory || './',
-        capabilities: agent.capabilities || [],
-        description: agent.inline?.system_prompt ? 
-          this.extractDescription(agent.inline.system_prompt) : 
-          `${agent.name || agent.id} agent`,
-        specialties: agent.specialties || [],
-        systemPrompt: agent.inline?.system_prompt,
-        options: agent.options || []
+      const agents = await Promise.all(config.agents.map(async (agent: any) => {
+        let systemPrompt = agent.inline?.system_prompt;
+        
+        // Process system_prompt template with documents and context
+        if (systemPrompt) {
+          // Build template context
+          const templateContext: TemplateContext = {
+            env: process.env,
+            agent: {
+              id: agent.id,
+              name: agent.name || agent.id,
+              provider: agent.provider || agent.inline?.provider || 'claude',
+              model: agent.inline?.model,
+              workingDirectory: agent.working_directory || agent.workingDirectory,
+            },
+            vars: {},
+          };
+          
+          // Merge agent-specific documents if present
+          let documentLoader = this.documentLoaderService;
+          
+          if (agent.inline?.documents) {
+            // Create temporary merged document definitions for this agent
+            const mergedDocs = await this.documentLoaderService.mergeAgentDocuments(agent.inline.documents);
+            // For template processing, we need to temporarily use merged docs
+            // This is a bit hacky but maintains the service architecture
+            const originalDefs = this.documentLoaderService.getDocumentDefinitions();
+            (this.documentLoaderService as any).documentDefinitions = mergedDocs;
+            
+            systemPrompt = await processDocumentTemplate(systemPrompt, this.documentLoaderService, templateContext);
+            
+            // Restore original definitions
+            (this.documentLoaderService as any).documentDefinitions = originalDefs;
+          } else {
+            systemPrompt = await processDocumentTemplate(systemPrompt, this.documentLoaderService, templateContext);
+          }
+          
+          this.logger.debug(`Processed template for agent: ${agent.id}`);
+        }
+        
+        return {
+          id: agent.id,
+          name: agent.name || agent.id,
+          role: agent.role || 'AI Agent',
+          team: agent.team,
+          provider: agent.inline?.provider || 'claude',
+          workingDirectory: agent.working_directory || './',
+          capabilities: agent.capabilities || [],
+          description: systemPrompt ? 
+            this.extractDescription(systemPrompt) : 
+            `${agent.name || agent.id} agent`,
+          specialties: agent.specialties || [],
+          systemPrompt: systemPrompt,
+          options: agent.options || [],
+          inline: agent.inline // Pass inline configuration including model
+        };
       }));
+      
+      return agents;
 
     } catch (error) {
       this.logger.error(`Failed to load agents config from ${configPath}:`, getErrorMessage(error));
@@ -1336,5 +1496,40 @@ Please check permissions and try again, or manually delete files from \`.codecre
     }
     
     return 'AI Agent';
+  }
+
+  /**
+   * Get available provider with fallback support
+   * Tries providers in order: claude → gemini → copilot
+   * Returns the first available provider
+   */
+  private async getAvailableProvider(preferredProvider?: 'claude' | 'gemini' | 'copilot'): Promise<'claude' | 'gemini' | 'copilot'> {
+    const fallbackOrder: ('claude' | 'gemini' | 'copilot')[] = ['claude', 'gemini', 'copilot'];
+    
+    // If preferred provider is specified, try it first
+    if (preferredProvider) {
+      const provider = this.aiProviderService.getProvider(preferredProvider);
+      if (provider) {
+        const isAvailable = await provider.isAvailable();
+        if (isAvailable) {
+          return preferredProvider;
+        }
+      }
+    }
+    
+    // Try providers in fallback order
+    for (const providerName of fallbackOrder) {
+      const provider = this.aiProviderService.getProvider(providerName);
+      if (provider) {
+        const isAvailable = await provider.isAvailable();
+        if (isAvailable) {
+          this.logger.log(`Using fallback provider: ${providerName}`);
+          return providerName;
+        }
+      }
+    }
+    
+    // Default to claude if none available (will show error later)
+    return 'claude';
   }
 }

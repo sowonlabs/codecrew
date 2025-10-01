@@ -21,6 +21,7 @@ export interface AIQueryOptions {
   timeout?: number;
   workingDirectory?: string;
   additionalArgs?: string[];
+  model?: string; // Model to use for this query (e.g., "sonnet", "gemini-2.5-pro", "gpt-5")
 }
 
 @Injectable()

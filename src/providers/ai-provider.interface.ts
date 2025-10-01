@@ -3,6 +3,7 @@ export interface AIQueryOptions {
   workingDirectory?: string;
   additionalArgs?: string[];
   taskId?: string;
+  model?: string; // Model to use for this query (e.g., "sonnet", "gemini-2.5-pro", "gpt-5")
 }
 
 export interface AIResponse {

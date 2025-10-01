@@ -40,18 +40,20 @@ export async function handleQuery(app: any, args: CliOptions) {
     interface ParsedQuery {
       agentId: string;
       query: string;
+      model?: string; // Optional model specification
     }
 
     const parsedQueries: ParsedQuery[] = [];
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/;
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/;
 
     for (const queryStr of queryInput) {
       const match = queryStr.match(mentionRegex);
       if (match && match[1]) {
         const agentId: string = match[1];
+        const model: string | undefined = match[2]; // Capture model if provided
         const query = queryStr.replace(mentionRegex, '').trim();
         if (query) {
-          parsedQueries.push({ agentId, query });
+          parsedQueries.push({ agentId, query, model });
         }
       }
     }
@@ -77,20 +79,21 @@ export async function handleQuery(app: any, args: CliOptions) {
         console.log('❌ No valid queries found');
         process.exit(1);
       }
-      const { agentId, query } = firstQuery;
+      const { agentId, query, model } = firstQuery;
 
       if (!args.raw) {
         console.log(`📋 Task: ${query}`);
-        console.log(`🤖 Agent: @${agentId}`);
+        console.log(`🤖 Agent: @${agentId}${model ? `:${model}` : ''}`);
         console.log('');
-        console.log(`🔎 Querying single agent: @${agentId}`);
+        console.log(`🔎 Querying single agent: @${agentId}${model ? `:${model}` : ''}`);
         console.log('─'.repeat(60));
       }
 
       result = await codeCrewTool.queryAgent({
         agentId: agentId,
         query: query,
-        context: contextFromPipe
+        context: contextFromPipe,
+        model: model
       });
 
       // 5. Format and output results for single agent
@@ -114,7 +117,8 @@ export async function handleQuery(app: any, args: CliOptions) {
       const queries = parsedQueries.map(pq => ({
         agentId: pq.agentId,
         query: pq.query,
-        context: contextFromPipe
+        context: contextFromPipe,
+        model: pq.model
       }));
 
       result = await codeCrewTool.queryAgentParallel({ queries });

@@ -132,6 +132,11 @@ Started: ${timestamp}
         ...this.getDefaultArgs(),
       ];
       
+      // Add --model option if specified
+      if (options.model) {
+        args.unshift(`--model=${options.model}`);
+      }
+      
       // Providers handle prompts differently
       if (this.getPromptInArgs()) {
         // Include prompt in args like Copilot
@@ -193,6 +198,10 @@ Started: ${timestamp}
           }
 
           // Handle failure if exit code is non-zero or provider detects an error
+          // NOTE: We check providerError even when code === 0 because some CLI tools
+          // incorrectly return exit code 0 even when they encounter errors.
+          // The parseProviderError method checks stderr/stdout for error patterns like
+          // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
           if (code !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${code}`;
@@ -277,6 +286,11 @@ Started: ${timestamp}
         ...this.getExecuteArgs(),
       ];
       
+      // Add --model option if specified
+      if (options.model) {
+        args.unshift(`--model=${options.model}`);
+      }
+      
       // Providers handle prompts differently
       if (this.getPromptInArgs()) {
         // Include prompt in args like Copilot, Gemini
@@ -346,6 +360,10 @@ Started: ${timestamp}
           }
 
           // Handle failure if exit code is non-zero or provider detects an error
+          // NOTE: We check providerError even when code === 0 because some CLI tools
+          // incorrectly return exit code 0 even when they encounter errors.
+          // The parseProviderError method checks stderr/stdout for error patterns like
+          // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
           if (code !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${code}`;
