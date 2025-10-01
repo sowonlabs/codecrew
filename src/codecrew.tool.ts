@@ -781,7 +781,8 @@ Execution Mode: Implementation guidance could not be provided.`
       }
       
       // 2. Load user-defined agents from agents.yaml (if exists)
-      const agentsConfigPath = process.env.AGENTS_CONFIG || 'agents.yaml';
+      const path = await import('path');
+      const agentsConfigPath = process.env.AGENTS_CONFIG || path.join(process.cwd(), 'agents.yaml');
       this.logger.log(`Loading user agents from config: ${agentsConfigPath}`);
       
       try {
@@ -963,6 +964,17 @@ Execution Mode: Implementation guidance could not be provided.`
         capabilities: ['code_generation', 'code_completion', 'debugging'],
         description: 'GitHub Copilot AI assistant for code generation, completion, and debugging.',
         specialties: ['Code Generation', 'Code Completion', 'Debugging', 'GitHub Integration']
+      },
+      {
+        id: 'codecrew',
+        name: 'CodeCrew Assistant',
+        role: 'assistant',
+        team: 'CodeCrew',
+        provider: ['claude', 'gemini', 'copilot'] as any,
+        workingDirectory: './',
+        capabilities: ['codecrew_help', 'cli_guidance', 'agent_configuration'],
+        description: 'CodeCrew platform assistant for CLI usage, agent configuration, and troubleshooting.',
+        specialties: ['CodeCrew CLI', 'Multi-Agent Collaboration', 'Configuration', 'Troubleshooting']
       }
     ];
   }
@@ -1060,6 +1072,8 @@ Execution Mode: Implementation guidance could not be provided.`
       return agents;
 
     } catch (error) {
+      console.error(`[DEBUG] Failed to load agents config from ${configPath}:`, getErrorMessage(error));
+      console.error(`[DEBUG] Error stack:`, error);
       this.logger.error(`Failed to load agents config from ${configPath}:`, getErrorMessage(error));
       // Return empty array if config loading fails
       return [];

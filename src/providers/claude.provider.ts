@@ -47,8 +47,7 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
-    // Check for authentication errors - only in stderr or at the start of output
-    // Avoid matching 'authentication' in response content by checking context
+    // Check for authentication errors
     if (stderr && (stderr.includes('authentication required') || stderr.includes('Please run `claude login`'))) {
       return {
         error: true,
@@ -57,21 +56,58 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
-    // Check for network errors - ONLY in stderr, NOT in stdout (which contains AI response)
-    // stdout may contain words like "network" or "connection" in legitimate responses
-    if (stderr && (stderr.includes('network') || stderr.includes('connection'))) {
-      return {
-        error: true,
-        message:
-          'Network connection error. Please check your internet connection and try again.',
-      };
+    // If stdout exists and has content, the command succeeded
+    // stderr is just debug logs from Claude CLI (follow-redirects, spawn-rx, etc)
+    if (stdout && stdout.trim().length > 0) {
+      return { error: false, message: '' };
     }
 
-    // Only treat stderr as error if there's no stdout (empty response)
-    if (stderr && !stdout) {
-      return { error: true, message: stderr };
+    // No stdout - check if stderr contains actual error messages
+    if (stderr && stderr.trim().length > 0) {
+      // Pattern 1: Actual error messages (short, clear)
+      const errorIndicators = [
+        /^Error:/im,                    // Starts with "Error:"
+        /^Failed:/im,                   // Starts with "Failed:"
+        /^Unable to/im,                 // Starts with "Unable to"
+        /command not found/i,           // Shell error
+        /no such file/i,                // File error
+        /permission denied/i,           // Permission error
+        /ECONNREFUSED/,                 // Network error code
+        /ETIMEDOUT/,                    // Timeout error code
+        /ENOTFOUND/,                    // DNS error code
+        /EHOSTUNREACH/,                 // Host unreachable
+        /\bconnection refused\b/i,      // Word boundary for "connection refused"
+        /\bnetwork error\b/i,           // Word boundary for "network error"
+        /\brequest failed\b/i,          // Word boundary for "request failed"
+      ];
+
+      // Pattern 2: Debug logs (ignore these)
+      const debugLogPatterns = [
+        /follow-redirects options/,     // HTTP debug
+        /spawn-rx/,                     // Process spawn debug
+        /\[Function:/,                  // Function objects
+        /connectionListener/,           // Function name in debug
+        /maxRedirects:/,                // HTTP config
+        /\{[\s\S]*protocol:.*\}/,       // JSON object with protocol
+      ];
+
+      // Check if stderr is debug logs
+      const isDebugLog = debugLogPatterns.some(pattern => pattern.test(stderr));
+      if (isDebugLog) {
+        return { error: false, message: '' };
+      }
+
+      // Check if stderr contains actual errors
+      const hasError = errorIndicators.some(pattern => pattern.test(stderr));
+      if (hasError) {
+        // Extract first line as error message (usually the most relevant)
+        const lines = stderr.split('\n');
+        const firstLine = lines[0]?.trim() || stderr.trim();
+        return { error: true, message: firstLine };
+      }
     }
 
+    // No stdout and no clear error in stderr
     return { error: false, message: '' };
   }
 }

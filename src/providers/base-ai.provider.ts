@@ -164,12 +164,19 @@ Started: ${timestamp}
 
       return new Promise((resolve) => {
         // Use command name directly with shell: true for cross-platform execution
+        // Set UTF-8 encoding for Windows PowerShell to handle Korean/Unicode correctly
+        const env = { ...process.env };
+        if (process.platform === 'win32') {
+          env.PYTHONIOENCODING = 'utf-8';
+          env.LANG = 'en_US.UTF-8';
+        }
+        
         const child = spawn(executablePath, args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.workingDirectory || process.cwd(),
-          env: process.env,
+          env,
           shell: true, // Let shell handle .cmd/.bat files on Windows
-        });
+        } as any);
 
         let stdout = '';
         let stderr = '';
@@ -195,6 +202,20 @@ Started: ${timestamp}
             this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
 
+          // If exit code is 0 and we have stdout, it's a success (ignore stderr debug logs)
+          if (exitCode === 0 && stdout && stdout.trim().length > 0) {
+            this.appendTaskLog(taskId, 'INFO', `${this.name} query completed successfully`);
+            resolve({
+              content: stdout.trim(),
+              provider: this.name,
+              command,
+              success: true,
+              taskId,
+            });
+            return;
+          }
+
+          // Otherwise check for errors
           const providerError = this.parseProviderError(stderr, stdout);
           if (exitCode !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;
@@ -210,9 +231,10 @@ Started: ${timestamp}
             return;
           }
 
-          this.appendTaskLog(taskId, 'INFO', `${this.name} query completed successfully`);
+          // Edge case: exit 0 but no output
+          this.appendTaskLog(taskId, 'INFO', `${this.name} query completed with no output`);
           resolve({
-            content: stdout.trim(),
+            content: '',
             provider: this.name,
             command,
             success: true,
@@ -311,11 +333,18 @@ Started: ${timestamp}
       this.logger.log(`Executing ${this.name} in execute mode (length: ${prompt.length})`);
 
       return new Promise((resolve) => {
+        // Set UTF-8 encoding for Windows PowerShell to handle Korean/Unicode correctly
+        const env = { ...process.env };
+        if (process.platform === 'win32') {
+          env.PYTHONIOENCODING = 'utf-8';
+          env.LANG = 'en_US.UTF-8';
+        }
+        
         // Use command name directly with shell: true for cross-platform execution
         const child = spawn(executablePath, args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.workingDirectory || process.cwd(),
-          env: process.env,
+          env,
           shell: true, // Let shell handle .cmd/.bat files on Windows
         });
 
@@ -343,6 +372,20 @@ Started: ${timestamp}
             this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
 
+          // If exit code is 0 and we have stdout, it's a success (ignore stderr debug logs)
+          if (exitCode === 0 && stdout && stdout.trim().length > 0) {
+            this.appendTaskLog(taskId, 'INFO', `${this.name} execution completed successfully`);
+            resolve({
+              content: stdout.trim(),
+              provider: this.name,
+              command,
+              success: true,
+              taskId,
+            });
+            return;
+          }
+
+          // Otherwise check for errors
           const providerError = this.parseProviderError(stderr, stdout);
           if (exitCode !== 0 || providerError.error) {
             const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;

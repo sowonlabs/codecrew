@@ -20,10 +20,16 @@ let visit: any;
 
 async function loadRemarkModules() {
   if (!remarkParse) {
-    remarkParse = (await import('remark-parse')).default;
-    remarkStringify = (await import('remark-stringify')).default;
-    unified = (await import('unified')).unified;
-    visit = (await import('unist-util-visit')).visit;
+    // Use dynamic import with string concatenation to prevent TypeScript from transforming it to require()
+    const remarkParseModule = await (new Function('return import("remark-parse")')());
+    const remarkStringifyModule = await (new Function('return import("remark-stringify")')());
+    const unifiedModule = await (new Function('return import("unified")')());
+    const visitModule = await (new Function('return import("unist-util-visit")')());
+    
+    remarkParse = remarkParseModule.default;
+    remarkStringify = remarkStringifyModule.default;
+    unified = unifiedModule.unified;
+    visit = visitModule.visit;
   }
 }
 
