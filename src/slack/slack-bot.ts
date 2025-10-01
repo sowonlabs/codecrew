@@ -73,10 +73,10 @@ export class SlackBot {
     try {
       const messageText = (message as any).text || '';
       
-      // Remove bot mention from text (Slack format: <@U123456>)
+      // Remove only bot mention from text (Slack format: <@U123456>)
+      // Keep "codecrew" in the actual message content - it might be part of the question
       let userRequest = messageText
         .replace(/<@[A-Z0-9]+>/gi, '') // Remove Slack user mentions
-        .replace(/codecrew/gi, '')       // Remove codecrew text
         .trim();
 
       this.logger.log(`📝 Parsed request: "${userRequest.substring(0, 100)}..."`);

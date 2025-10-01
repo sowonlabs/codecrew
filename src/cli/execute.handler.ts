@@ -100,7 +100,12 @@ export async function handleExecute(app: any, args: CliOptions) {
       console.log('');
       console.log(`📄 Response:`);
       console.log('────────────────────────────────────────');
-      console.log(result.success ? result.response : `❌ Error: ${result.error}`);
+      // Extract response from MCP format: content[0].text or implementation
+      const responseText = result.implementation || 
+                          (result.content && result.content[0]?.text) || 
+                          result.response || 
+                          'No response content';
+      console.log(result.success ? responseText : `❌ Error: ${result.error}`);
       console.log('');
       console.log(`📁 Working Directory: ${result.workingDirectory}`);
       console.log('');
@@ -145,7 +150,12 @@ export async function handleExecute(app: any, args: CliOptions) {
         console.log('──────────────────────────────────────────────────');
         console.log(status);
         console.log(`📄 Response:`);
-        console.log(agentResult.success ? agentResult.response : `❌ Error: ${agentResult.error}`);
+        // Extract response from MCP format
+        const responseText = agentResult.implementation || 
+                            (agentResult.content && agentResult.content[0]?.text) || 
+                            agentResult.response || 
+                            'No response content';
+        console.log(agentResult.success ? responseText : `❌ Error: ${agentResult.error}`);
         if (index < result.results.length - 1) {
           console.log('');
         }

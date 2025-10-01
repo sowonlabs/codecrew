@@ -270,6 +270,25 @@ codecrew execute "@gemini implement the suggested improvements"
    codecrew execute "@claude create a simple Node.js HTTP server"
    ```
 
+### **🎨 Create Your First Custom Agent**
+
+Build specialized agents tailored to your needs - it's easier than you think!
+
+```bash
+# Let @codecrew create an agent for you
+codecrew execute "@codecrew Create a Python expert agent. ID 'python_expert', use claude sonnet. Specializes in code review, optimization, and debugging."
+
+# Test your new agent
+codecrew query "@python_expert Review this code: def calc(x,y): return x+y"
+
+# Create any specialist you need
+codecrew execute "@codecrew Create a React specialist agent with TypeScript expertise"
+codecrew execute "@codecrew Create a DevOps agent for Docker and Kubernetes"
+codecrew execute "@codecrew Create a security analyst agent"
+```
+
+**That's it!** The `@codecrew` assistant understands what you want and creates a complete agent configuration for you. For a detailed guide, see [Creating Your First Agent](docs/creating-your-first-agent.md).
+
 For detailed CLI documentation and advanced usage patterns, see [README.cli.md](README.cli.md).
 
 ## Available Tools
@@ -292,10 +311,61 @@ For detailed CLI documentation and advanced usage patterns, see [README.cli.md](
 
 **Required:** Create an `agents.yaml` file to define your specialist agents:
 
+### Provider Configuration
+
+You can configure agents with either a **single provider** (fixed) or an **array of providers** (with fallback):
+
+```yaml
+agents:
+  # Fixed provider - always uses the specified provider
+  - id: "frontend_developer"
+    name: "React Expert"
+    provider: "claude"  # Single string: fixed to claude (no fallback)
+    working_directory: "/path/to/your/project"
+    options:
+      query:  # Options for read-only query mode
+        - "--add-dir=."
+        - "--verbose"
+      execute:  # Options for file modification execute mode
+        - "--add-dir=."
+        - "--allowedTools=Edit,Bash"
+    inline:
+      type: "agent"
+      system_prompt: |
+        You are a senior frontend developer expert specializing in React.
+
+  # Fallback provider - tries providers in order
+  - id: "flexible_assistant"
+    name: "Flexible AI Assistant"
+    provider: ["claude", "gemini", "copilot"]  # Array: tries claude → gemini → copilot
+    working_directory: "/path/to/your/project"
+    options:
+      execute:
+        claude:  # Provider-specific options
+          - "--permission-mode=acceptEdits"
+          - "--add-dir=."
+        gemini:
+          - "--include-directories=."
+        copilot:
+          - "--add-dir=."
+    inline:
+      type: "agent"
+      system_prompt: |
+        You are a flexible AI assistant that works with multiple providers.
+```
+
+**Provider Behavior:**
+- **Single string** (`provider: "claude"`): Always uses that provider, no fallback
+- **Array** (`provider: ["claude", "gemini", "copilot"]`): Tries providers in order until one is available
+- **Special case**: If a model is specified (`inline.model` or `--model`), even array-based agents use the first provider without fallback
+
+### Full Agent Configuration Example
+
 ```yaml
 agents:
   - id: "frontend_developer"
     name: "React Expert"
+    provider: "claude"
     working_directory: "/path/to/your/project"
     options:
       query:  # Options for read-only query mode
@@ -308,7 +378,6 @@ agents:
         # Execute mode allows file operations
     inline:
       type: "agent"
-      provider: "claude"
       system_prompt: |
         You are a senior frontend developer expert specializing in React.
         Provide detailed code examples and best practices.

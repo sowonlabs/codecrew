@@ -427,16 +427,26 @@ Query: ${query}`;
 
       // Use agent's AI provider - using queryAI wrapper
       let response;
-      let provider = agent.provider || 'claude';
+      let provider: 'claude' | 'gemini' | 'copilot';
       
-      // Special handling for @codecrew agent: use fallback if no inline.model specified
-      if (agentId === 'codecrew' && !agent.inline?.model && !model) {
-        provider = await this.getAvailableProvider(agent.provider);
-        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+      // Determine provider strategy based on agent configuration
+      if (Array.isArray(agent.provider)) {
+        // Provider is an array: use fallback mechanism (unless model is specified)
+        if (agent.inline?.model || model) {
+          // Model specified: use first provider in array as fixed provider
+          provider = agent.provider[0] || 'claude';
+        } else {
+          // No model: use fallback through the provider array
+          provider = await this.getAvailableProvider(agent.provider);
+          this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+        }
+      } else {
+        // Provider is a single string: use it as fixed provider (no fallback)
+        provider = agent.provider || 'claude';
       }
       
-      // Get mode-specific options for this agent (query mode)
-      const agentOptions = this.getOptionsForAgent(agent, 'query');
+      // Get mode-specific options for this agent (query mode) with provider context
+      const agentOptions = this.getOptionsForAgent(agent, 'query', provider);
       
       // Determine model to use (priority: runtime override > inline.model)
       const modelToUse = model || agent.inline?.model;
@@ -601,18 +611,28 @@ Task: ${task}
 
       // Use agent's AI provider (execution mode)
       let response;
-      let provider = agent.provider || 'claude';
+      let provider: 'claude' | 'gemini' | 'copilot';
       
-      // Special handling for @codecrew agent: use fallback if no inline.model specified
-      if (agentId === 'codecrew' && !agent.inline?.model && !model) {
-        provider = await this.getAvailableProvider(agent.provider);
-        this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+      // Determine provider strategy based on agent configuration
+      if (Array.isArray(agent.provider)) {
+        // Provider is an array: use fallback mechanism (unless model is specified)
+        if (agent.inline?.model || model) {
+          // Model specified: use first provider in array as fixed provider
+          provider = agent.provider[0] || 'claude';
+        } else {
+          // No model: use fallback through the provider array
+          provider = await this.getAvailableProvider(agent.provider);
+          this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using fallback provider: ${provider}` });
+        }
+      } else {
+        // Provider is a single string: use it as fixed provider (no fallback)
+        provider = agent.provider || 'claude';
       }
       
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Using provider: ${provider}` });
       
-      // Get mode-specific options for this agent (execute mode)
-      const agentOptions = this.getOptionsForAgent(agent, 'execute');
+      // Get mode-specific options for this agent (execute mode) with provider context
+      const agentOptions = this.getOptionsForAgent(agent, 'execute', provider);
       
       // Determine model to use (priority: runtime override > inline.model)
       const modelToUse = model || agent.inline?.model;
@@ -705,11 +725,27 @@ Execution Mode: Implementation guidance could not be provided.`
   /**
    * Get mode-specific options for a given agent and execution mode
    */
-  private getOptionsForAgent(agent: AgentInfo, mode: 'query' | 'execute'): string[] {
+  private getOptionsForAgent(agent: AgentInfo, mode: 'query' | 'execute', provider?: string): string[] {
     try {
       // Handle new structure: agent.options.query / agent.options.execute
       if (agent.options && typeof agent.options === 'object' && !Array.isArray(agent.options)) {
         const modeOptions = (agent.options as any)[mode];
+        
+        // If modeOptions is an object with provider-specific options
+        if (modeOptions && typeof modeOptions === 'object' && !Array.isArray(modeOptions)) {
+          // Try to get provider-specific options first
+          if (provider && modeOptions[provider]) {
+            return modeOptions[provider];
+          }
+          // Fall back to 'default' key if exists
+          if (modeOptions['default']) {
+            return modeOptions['default'];
+          }
+          // If no provider match, return empty (avoid using wrong provider options)
+          return [];
+        }
+        
+        // If modeOptions is an array (backward compatibility)
         return modeOptions || [];
       }
       
@@ -849,7 +885,7 @@ Execution Mode: Implementation guidance could not be provided.`
           name: agent.name || agent.id,
           role: agent.role || 'AI Agent',
           team: agent.team,
-          provider: agent.inline?.provider || agent.provider || 'claude',
+          provider: this.parseProviderConfig(agent),  // Use common parser
           workingDirectory: agent.working_directory || './',
           capabilities: agent.capabilities || [],
           description: systemPrompt ? 
@@ -867,6 +903,26 @@ Execution Mode: Implementation guidance could not be provided.`
     } catch (error) {
       this.logger.error('Failed to load built-in agents from template:', getErrorMessage(error));
       throw error;
+    }
+  }
+
+  /**
+   * Parse provider from agent configuration
+   * Supports both single string and array formats
+   */
+  private parseProviderConfig(agent: any): 'claude' | 'gemini' | 'copilot' | ('claude' | 'gemini' | 'copilot')[] {
+    // Priority: agent.provider > agent.inline.provider > default 'claude'
+    const configProvider = agent.provider || agent.inline?.provider;
+    
+    if (Array.isArray(configProvider)) {
+      // Already an array: use as-is
+      return configProvider as ('claude' | 'gemini' | 'copilot')[];
+    } else if (typeof configProvider === 'string') {
+      // Single string: use as-is
+      return configProvider as 'claude' | 'gemini' | 'copilot';
+    } else {
+      // No provider specified: default to 'claude'
+      return 'claude';
     }
   }
 
@@ -988,7 +1044,7 @@ Execution Mode: Implementation guidance could not be provided.`
           name: agent.name || agent.id,
           role: agent.role || 'AI Agent',
           team: agent.team,
-          provider: agent.inline?.provider || 'claude',
+          provider: this.parseProviderConfig(agent),  // Use common parser
           workingDirectory: agent.working_directory || './',
           capabilities: agent.capabilities || [],
           description: systemPrompt ? 
@@ -1549,33 +1605,47 @@ Please check permissions and try again, or manually delete files from \`.codecre
    * Tries providers in order: claude → gemini → copilot
    * Returns the first available provider
    */
-  private async getAvailableProvider(preferredProvider?: 'claude' | 'gemini' | 'copilot'): Promise<'claude' | 'gemini' | 'copilot'> {
-    const fallbackOrder: ('claude' | 'gemini' | 'copilot')[] = ['claude', 'gemini', 'copilot'];
+  /**
+   * Get available provider with fallback support
+   * @param providerConfig - Single provider string or array of providers for fallback
+   * @returns Available provider name
+   */
+  private async getAvailableProvider(
+    providerConfig?: 'claude' | 'gemini' | 'copilot' | ('claude' | 'gemini' | 'copilot')[]
+  ): Promise<'claude' | 'gemini' | 'copilot'> {
+    // Default fallback order if no config provided
+    const defaultFallbackOrder: ('claude' | 'gemini' | 'copilot')[] = ['claude', 'gemini', 'copilot'];
     
-    // If preferred provider is specified, try it first
-    if (preferredProvider) {
-      const provider = this.aiProviderService.getProvider(preferredProvider);
-      if (provider) {
-        const isAvailable = await provider.isAvailable();
-        if (isAvailable) {
-          return preferredProvider;
-        }
-      }
+    // Determine fallback order based on input
+    let fallbackOrder: ('claude' | 'gemini' | 'copilot')[];
+    
+    if (!providerConfig) {
+      // No config: use default order
+      fallbackOrder = defaultFallbackOrder;
+    } else if (Array.isArray(providerConfig)) {
+      // Array: use as-is for fallback order
+      fallbackOrder = providerConfig;
+    } else {
+      // Single string: try only this provider, then fall back to default order
+      fallbackOrder = [providerConfig, ...defaultFallbackOrder.filter(p => p !== providerConfig)];
     }
     
-    // Try providers in fallback order
+    // Try providers in order
     for (const providerName of fallbackOrder) {
       const provider = this.aiProviderService.getProvider(providerName);
       if (provider) {
         const isAvailable = await provider.isAvailable();
         if (isAvailable) {
-          this.logger.log(`Using fallback provider: ${providerName}`);
+          if (fallbackOrder.indexOf(providerName) > 0) {
+            this.logger.log(`Using fallback provider: ${providerName} (tried: ${fallbackOrder.slice(0, fallbackOrder.indexOf(providerName)).join(', ')})`);
+          }
           return providerName;
         }
       }
     }
     
     // Default to claude if none available (will show error later)
+    this.logger.warn('No providers available, defaulting to claude');
     return 'claude';
   }
 }

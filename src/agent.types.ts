@@ -80,16 +80,16 @@ export interface AgentInfo {
   name?: string;
   role?: string;
   team?: string;
-  provider: 'claude' | 'gemini' | 'copilot';
+  provider: 'claude' | 'gemini' | 'copilot' | ('claude' | 'gemini' | 'copilot')[]; // Single provider or array for fallback
   workingDirectory: string;
   capabilities: string[];
   description: string;
   specialties?: string[];
   systemPrompt?: string;
   options?: string[] | {
-    query?: string[];    // Read-only analysis mode options
-    execute?: string[];  // File modification/execution mode options
-  }; // Flexible CLI options - legacy array or new mode-specific object
+    query?: string[] | { claude?: string[], gemini?: string[], copilot?: string[] };    // Read-only analysis mode options
+    execute?: string[] | { claude?: string[], gemini?: string[], copilot?: string[] };  // File modification/execution mode options
+  }; // Flexible CLI options - legacy array, mode-specific array, or provider-specific object
   inline?: {
     type: 'agent';
     provider: 'claude' | 'gemini' | 'copilot';
