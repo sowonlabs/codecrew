@@ -14,11 +14,13 @@ export class CLIHandler {
     try {
       switch (args.command) {
         case 'query':
+        case 'q':  // Shorthand for query
           const { handleQuery } = await import('./query.handler');
           await handleQuery(app, args);
           break;
         
         case 'execute':
+        case 'x':  // Shorthand for execute
           const { handleExecute } = await import('./execute.handler');
           await handleExecute(app, args);
           break;
@@ -31,6 +33,11 @@ export class CLIHandler {
         case 'init':
           const { handleInit } = await import('./init.handler');
           await handleInit(app, args);
+          break;
+
+        case 'templates':
+          const { handleTemplates } = await import('./templates.handler');
+          await handleTemplates(app, args);
           break;
 
         case 'help':

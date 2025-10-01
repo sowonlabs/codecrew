@@ -44,22 +44,22 @@ their own specialization, and get results in parallel.
     console.log(chalk.bold.white('COMMANDS:'));
 
     this.showCommandHelp(
-      'query',
+      'query, q',
       'Ask a question or assign a high-level task. Ideal for analysis, design, and complex problem-solving.',
       [
         'codecrew query "Analyze our authentication flow for potential security vulnerabilities. @claude"',
-        'codecrew query "What are the best practices for building a scalable REST API in Node.js? @copilot"',
-        'codecrew query "Design a database schema for a simple e-commerce site. @claude"',
+        'codecrew q "@claude:opus Design a database schema for a simple e-commerce site."',
+        'codecrew q "What are the best practices for building a scalable REST API in Node.js? @copilot"',
       ],
     );
 
     this.showCommandHelp(
-      'execute',
+      'execute, x',
       'Give a direct order to write or modify code. Best for implementation-focused tasks.',
       [
         'codecrew execute "Implement a function that calculates the factorial of a number in TypeScript. @gemini"',
-        "codecrew execute \"Refactor the 'userService.ts' file to use async/await instead of promises. @copilot\"",
-        "codecrew execute \"Create a new React component called 'UserProfile' with a form to update user details. @copilot\"",
+        'codecrew x "@copilot:gpt-5 Refactor the \'userService.ts\' file to use async/await instead of promises."',
+        'codecrew x "Create a new React component called \'UserProfile\' with a form to update user details. @copilot"',
       ],
     );
 

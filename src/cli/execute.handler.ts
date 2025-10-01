@@ -39,18 +39,20 @@ export async function handleExecute(app: any, args: CliOptions) {
     interface ParsedTask {
       agentId: string;
       task: string;
+      model?: string; // Optional model specification
     }
 
     const parsedTasks: ParsedTask[] = [];
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)/;
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/;
 
     for (const taskStr of executeInput) {
       const match = taskStr.match(mentionRegex);
       if (match && match[1]) {
         const agentId: string = match[1];
+        const model: string | undefined = match[2]; // Capture model if provided
         const task = taskStr.replace(mentionRegex, '').trim();
         if (task) {
-          parsedTasks.push({ agentId, task });
+          parsedTasks.push({ agentId, task, model });
         }
       }
     }
@@ -72,11 +74,11 @@ export async function handleExecute(app: any, args: CliOptions) {
         console.log('❌ No valid tasks found');
         process.exit(1);
       }
-      const { agentId, task } = firstTask;
+      const { agentId, task, model } = firstTask;
       console.log(`📋 Task: ${task}`);
-      console.log(`🤖 Agent: @${agentId}`);
+      console.log(`🤖 Agent: @${agentId}${model ? `:${model}` : ''}`);
       console.log('');
-      console.log(`⚡ Executing task with single agent: @${agentId}`);
+      console.log(`⚡ Executing task with single agent: @${agentId}${model ? `:${model}` : ''}`);
       console.log('────────────────────────────────────────────────────────────');
       console.log('');
 
@@ -84,7 +86,8 @@ export async function handleExecute(app: any, args: CliOptions) {
         agentId: agentId,
         task: task,
         projectPath: process.cwd(),
-        context: contextFromPipe
+        context: contextFromPipe,
+        model: model
       });
 
       // Format and display result
@@ -116,7 +119,8 @@ export async function handleExecute(app: any, args: CliOptions) {
         agentId: pt.agentId,
         task: pt.task,
         projectPath: process.cwd(),
-        context: contextFromPipe
+        context: contextFromPipe,
+        model: pt.model
       }));
 
       const result = await codeCrewTool.executeAgentParallel({ tasks });

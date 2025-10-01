@@ -182,21 +182,33 @@ codecrew doctor --config path/to/config.yaml  # Use custom config
 - ✅ Perfect for code analysis, reviews, and explanations
 - ✅ Supports pipeline input for context chaining
 - ✅ No file modifications - safe for analysis
+- ✅ **Model selection** - Specify AI models with `@agent:model` syntax
 
 ```bash
 codecrew query "@claude analyze this function"
+codecrew query "@claude:opus detailed code review"
+codecrew query "@gemini:gemini-2.5-pro optimize algorithm"
+codecrew query "@copilot:gpt-5 suggest best practices"
 codecrew query "@claude @gemini @copilot review security practices"
 echo "user auth code" | codecrew query "@claude explain this"
 ```
+
+**Available Models:**
+- **Claude**: `opus`, `sonnet`, `haiku`, `claude-sonnet-4-5`, `claude-sonnet-4-5-20250929`
+- **Gemini**: `gemini-2.5-flash` (default), `gemini-2.5-pro`
+- **Copilot**: `gpt-5`, `claude-sonnet-4`, `claude-sonnet-4.5`
 
 **`codecrew execute`** - File Operations
 - ✅ Agents can create, modify, and delete files
 - ✅ Parallel execution with detailed performance metrics
 - ✅ Pipeline support for multi-step workflows
 - ✅ Comprehensive logging and error handling
+- ✅ **Model selection** - Choose specific AI models for tasks
 
 ```bash
 codecrew execute "@claude create a React component"
+codecrew execute "@claude:opus implement complex authentication system"
+codecrew execute "@gemini:gemini-2.5-pro optimize performance-critical code"
 codecrew execute "@claude @gemini implement different sorting algorithms"
 codecrew query "@architect design API" | codecrew execute "@backend implement the design"
 ```
@@ -335,6 +347,149 @@ agents:
       system_prompt: |
         You are a coding assistant specialized in code suggestions and reviews.
 ```
+
+## Document System
+
+CodeCrew includes a powerful document system that allows agents to access markdown documentation through template variables. This enables agents to reference project-specific knowledge, coding standards, and guidelines.
+
+### 3-Level Document System
+
+Documents can be defined at three levels with clear priority:
+
+1. **`documents.yaml`** - Global documents (shared across projects)
+2. **`agents.yaml` documents:** section - Project-level documents
+3. **`agent.inline.documents`** - Agent-specific documents
+
+**Priority:** `agent.inline.documents` > `agents.yaml documents` > `documents.yaml`
+
+### Document Definition Methods
+
+**1. Inline Raw Markdown** (Simple string format)
+```yaml
+# documents.yaml
+documents:
+  quick-tips: |
+    # Quick Tips
+    - Use @agent:model to specify AI model
+    - Use q/x shortcuts for query/execute commands
+```
+
+**2. Object Format with Metadata**
+```yaml
+documents:
+  coding-standards: |
+    # Coding Standards
+    ## TypeScript
+    - Always use strict type checking
+```
+
+**3. Load from File Path**
+```yaml
+documents:
+  readme:
+    path: "documents/README.md"
+    summary: "Main documentation"
+    type: "markdown"
+    lazy: false  # Load immediately
+  
+  large-guide:
+    path: "documents/large-guide.md"
+    lazy: true   # Load on-demand (for large files)
+```
+
+### Using Documents in Agents
+
+Reference documents in your agent's `system_prompt` using Handlebars template variables:
+
+```yaml
+# agents.yaml
+documents:
+  project-guide: |
+    # Project Guide
+    This is project-specific documentation.
+
+agents:
+  - id: "my_agent"
+    inline:
+      documents:
+        agent-doc: |
+          # Agent-Specific Doc
+          Only this agent can see this.
+      system_prompt: |
+        You are a helpful assistant.
+        
+        <document name="quick-tips">
+        {{{documents.quick-tips.content}}}
+        </document>
+        
+        <toc>
+        {{{documents.readme.toc}}}
+        </toc>
+        
+        Summary: {{documents.readme.summary}}
+```
+
+### Available Template Variables
+
+- `{{{documents.name.content}}}` - Full document content (unescaped, preserves formatting)
+- `{{{documents.name.toc}}}` - Table of contents (markdown headings only)
+- `{{documents.name.summary}}` - Document summary (if defined)
+
+**Note:** Use triple braces `{{{...}}}` for unescaped content to preserve markdown formatting.
+
+### Example: Complete Setup
+
+**documents.yaml:**
+```yaml
+documents:
+  coding-standards: |
+    # Coding Standards
+    ## TypeScript
+    - Use strict type checking
+    - Prefer interfaces over types
+```
+
+**agents.yaml:**
+```yaml
+documents:
+  project-conventions: |
+    # Project Conventions
+    - Follow trunk-based development
+    - Write tests for all features
+
+agents:
+  - id: "code_reviewer"
+    inline:
+      documents:
+        review-checklist: |
+          # Review Checklist
+          - Check for type safety
+          - Verify test coverage
+      system_prompt: |
+        You are a code reviewer.
+        
+        <coding-standards>
+        {{{documents.coding-standards.content}}}
+        </coding-standards>
+        
+        <project-conventions>
+        {{{documents.project-conventions.content}}}
+        </project-conventions>
+        
+        <review-checklist>
+        {{{documents.review-checklist.content}}}
+        </review-checklist>
+        
+        Use these documents as guidelines when reviewing code.
+```
+
+### Benefits
+
+✅ **Version Control** - Documents are stored in YAML/markdown files  
+✅ **Reusability** - Share documents across multiple agents  
+✅ **Organization** - Separate concerns (global, project, agent-specific)  
+✅ **Performance** - Lazy loading support for large documents  
+✅ **Flexibility** - Mix inline and file-based documents  
 
 ## Troubleshooting
 

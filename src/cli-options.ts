@@ -14,12 +14,23 @@ export interface CliOptions {
   execute?: string | string[];
   doctor?: boolean;
   config?: string;
+  // Init options
+  template?: string;
+  templateVersion?: string;
+  force?: boolean;
   // API keys removed for security - use environment variables or CLI tool authentication instead
 }
 
 export function parseCliOptions(): CliOptions {
   const parsed = yargs(hideBin(process.argv))
     .command('query [message...]', 'Query agents with a message', (yargs) => {
+      yargs.positional('message', {
+        description: 'Message to send to agents (supports @agent mentions). Multiple arguments will be joined.',
+        type: 'string',
+        array: true
+      });
+    })
+    .command('q [message...]', 'Shorthand for query', (yargs) => {
       yargs.positional('message', {
         description: 'Message to send to agents (supports @agent mentions). Multiple arguments will be joined.',
         type: 'string',
@@ -33,8 +44,37 @@ export function parseCliOptions(): CliOptions {
         array: true
       });
     })
+    .command('x [task...]', 'Shorthand for execute', (yargs) => {
+      yargs.positional('task', {
+        description: 'Task to execute with agents (supports @agent mentions). Multiple arguments will be joined.',
+        type: 'string',
+        array: true
+      });
+    })
     .command('doctor', 'Check AI provider status', () => {})
-    .command('init', 'Initialize CodeCrew project', () => {})
+    .command('init', 'Initialize CodeCrew project', (yargs) => {
+      yargs.option('template', {
+        alias: 't',
+        type: 'string',
+        default: 'default',
+        description: 'Template to use (default, minimal, development, production)'
+      });
+      yargs.option('template-version', {
+        type: 'string',
+        default: 'main',
+        description: 'Template version to download (main, v0.1.8, etc.)'
+      });
+      yargs.option('force', {
+        alias: 'f',
+        type: 'boolean',
+        default: false,
+        description: 'Overwrite existing configuration file'
+      });
+    })
+    .command('templates', 'Manage agent templates', (yargs) => {
+      yargs.command('list', 'List available templates');
+      yargs.command('update', 'Clear cache and re-download templates');
+    })
     .command('mcp', 'Start MCP server for IDE integration', () => {})
     .command('help', 'Show help', () => {})
     .option('install', {

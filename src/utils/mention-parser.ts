@@ -9,6 +9,7 @@ export interface MentionTask {
   agents: string[];
   task: string;
   type: 'shared' | 'individual';
+  models?: Map<string, string>; // Map of agentId -> model (e.g., "claude" -> "sonnet")
 }
 
 /**
@@ -27,9 +28,10 @@ export interface ParsedMentions {
  *
  * - Shared task: "@agent1 @agent2 do something together"
  * - Individual tasks: "@agent1 do task A @agent2 do task B"
+ * - With model: "@agent1:model task A" or "@claude:sonnet explain this code"
  */
 export class MentionParser {
-  private readonly agentPattern = /(@[a-zA-Z0-9_]+)/g;
+  private readonly agentPattern = /(@[a-zA-Z0-9_]+(?::[a-zA-Z0-9._-]+)?)/g;
   private readonly validAgents: Set<string>;
 
   constructor(validAgents: string[]) {
@@ -49,6 +51,7 @@ export class MentionParser {
     const parts = text.split(this.agentPattern);
 
     let agentGroup: string[] = [];
+    let modelMap = new Map<string, string>();
     let taskText = '';
     let leadingText = '';
 
@@ -60,18 +63,31 @@ export class MentionParser {
         if (!part) continue;
 
         if (part.startsWith('@')) {
-            const agentId = part.substring(1);
+            // Parse @agent:model format
+            const mentionPart = part.substring(1); // Remove @
+            const [agentId, model] = mentionPart.split(':');
+            
+            if (!agentId) continue; // Skip if no agent ID
+            
             if (this.validAgents.has(agentId)) {
                 if (taskText.trim() && agentGroup.length > 0) {
                     tasks.push({
                         agents: agentGroup,
                         task: taskText.trim(),
                         type: agentGroup.length > 1 ? 'shared' : 'individual',
+                        models: modelMap.size > 0 ? modelMap : undefined,
                     });
                     agentGroup = [agentId];
+                    modelMap = new Map<string, string>();
+                    if (model) {
+                        modelMap.set(agentId, model);
+                    }
                     taskText = '';
                 } else {
                     agentGroup.push(agentId);
+                    if (model) {
+                        modelMap.set(agentId, model);
+                    }
                 }
             } else {
                 errors.push(`Unknown agent: @${agentId}`);
@@ -88,6 +104,7 @@ export class MentionParser {
                 agents: agentGroup,
                 task: trimmedTask,
                 type: agentGroup.length > 1 ? 'shared' : 'individual',
+                models: modelMap.size > 0 ? modelMap : undefined,
             });
         }
     } else if (taskText.trim()) {

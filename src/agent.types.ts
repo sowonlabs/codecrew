@@ -5,6 +5,8 @@ export interface AgentConfig {
     type: 'agent';
     provider: 'claude' | 'gemini' | 'copilot';
     system_prompt: string;
+    model?: string; // Optional model specification (e.g., "sonnet", "gemini-2.5-pro")
+    documents?: Record<string, string>; // Agent-specific documents
   };
   
   // Legacy single options array (for backward compatibility)
@@ -39,6 +41,7 @@ export enum ExecutionMode {
 }
 
 export interface AgentsConfig {
+  documents?: Record<string, string>; // Project-level documents
   agents: AgentConfig[];
 }
 
@@ -50,6 +53,7 @@ export interface AgentQueryOptions {
   executionMode?: ExecutionMode; // Specify execution mode
   securityLevel?: SecurityLevel; // Specify security level
   additionalArgs?: string[]; // Additional CLI arguments
+  model?: string; // Model to use for this query (e.g., "sonnet", "gemini-2.5-pro", "gpt-5")
 }
 
 export interface AgentResponse {
@@ -86,4 +90,10 @@ export interface AgentInfo {
     query?: string[];    // Read-only analysis mode options
     execute?: string[];  // File modification/execution mode options
   }; // Flexible CLI options - legacy array or new mode-specific object
+  inline?: {
+    type: 'agent';
+    provider: 'claude' | 'gemini' | 'copilot';
+    system_prompt: string;
+    model?: string; // Default model for this agent
+  };
 }
