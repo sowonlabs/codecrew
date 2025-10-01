@@ -163,17 +163,34 @@ Started: ${timestamp}
 
         let stdout = '';
         let stderr = '';
+        let exitCode: number | null = null;
 
-        child.stdout.on('data', (data) => {
-          const output = data.toString();
-          stdout += output;
-          this.appendTaskLog(taskId, 'STDOUT', output);
+        // stdout 완료 Promise
+        const stdoutPromise = new Promise<void>((resolveStdout) => {
+          child.stdout.on('data', (data) => {
+            const output = data.toString();
+            stdout += output;
+            this.appendTaskLog(taskId, 'STDOUT', output);
+          });
+          child.stdout.on('end', () => resolveStdout());
         });
 
-        child.stderr.on('data', (data) => {
-          const output = data.toString();
-          stderr += output;
-          this.appendTaskLog(taskId, 'STDERR', output);
+        // stderr 완료 Promise
+        const stderrPromise = new Promise<void>((resolveStderr) => {
+          child.stderr.on('data', (data) => {
+            const output = data.toString();
+            stderr += output;
+            this.appendTaskLog(taskId, 'STDERR', output);
+          });
+          child.stderr.on('end', () => resolveStderr());
+        });
+
+        // close 이벤트 Promise
+        const closePromise = new Promise<number | null>((resolveClose) => {
+          child.on('close', (code) => {
+            exitCode = code;
+            resolveClose(code);
+          });
         });
 
         const timeout = setTimeout(() => {
@@ -189,10 +206,12 @@ Started: ${timestamp}
           });
         }, options.timeout || 600000);
 
-        child.on('close', (code) => {
+        // 모든 이벤트가 완료될 때까지 대기
+        Promise.all([stdoutPromise, stderrPromise, closePromise]).then(() => {
           clearTimeout(timeout);
-          this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${code}`);
-          
+          this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${exitCode}`);
+          this.appendTaskLog(taskId, 'INFO', `STDOUT length: ${stdout.length} bytes`);
+
           if (stderr) {
             this.logger.warn(`[${taskId}] ${this.name} stderr: ${stderr}`);
           }
@@ -203,8 +222,8 @@ Started: ${timestamp}
           // The parseProviderError method checks stderr/stdout for error patterns like
           // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
-          if (code !== 0 || providerError.error) {
-            const errorMessage = providerError.message || stderr || `Exit code ${code}`;
+          if (exitCode !== 0 || providerError.error) {
+            const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;
             this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI failed: ${errorMessage}`);
             this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
             resolve({
@@ -223,7 +242,7 @@ Started: ${timestamp}
             content: stdout.trim(),
             provider: this.name,
             command,
-            success: true,
+            success: exitCode === 0,
             taskId,
           });
         });
@@ -236,7 +255,7 @@ Started: ${timestamp}
             provider: this.name,
             command,
             success: false,
-            error: error.code === 'ENOENT' ? 
+            error: error.code === 'ENOENT' ?
               this.getNotInstalledMessage() :
               error.message,
             taskId,
@@ -325,17 +344,34 @@ Started: ${timestamp}
 
         let stdout = '';
         let stderr = '';
+        let exitCode: number | null = null;
 
-        child.stdout.on('data', (data) => {
-          const output = data.toString();
-          stdout += output;
-          this.appendTaskLog(taskId, 'STDOUT', output);
+        // stdout 완료 Promise
+        const stdoutPromise = new Promise<void>((resolveStdout) => {
+          child.stdout.on('data', (data) => {
+            const output = data.toString();
+            stdout += output;
+            this.appendTaskLog(taskId, 'STDOUT', output);
+          });
+          child.stdout.on('end', () => resolveStdout());
         });
 
-        child.stderr.on('data', (data) => {
-          const output = data.toString();
-          stderr += output;
-          this.appendTaskLog(taskId, 'STDERR', output);
+        // stderr 완료 Promise
+        const stderrPromise = new Promise<void>((resolveStderr) => {
+          child.stderr.on('data', (data) => {
+            const output = data.toString();
+            stderr += output;
+            this.appendTaskLog(taskId, 'STDERR', output);
+          });
+          child.stderr.on('end', () => resolveStderr());
+        });
+
+        // close 이벤트 Promise
+        const closePromise = new Promise<number | null>((resolveClose) => {
+          child.on('close', (code) => {
+            exitCode = code;
+            resolveClose(code);
+          });
         });
 
         const timeout = setTimeout(() => {
@@ -351,10 +387,12 @@ Started: ${timestamp}
           });
         }, options.timeout || 1200000); // 20min default for execute mode
 
-        child.on('close', (code) => {
+        // 모든 이벤트가 완료될 때까지 대기
+        Promise.all([stdoutPromise, stderrPromise, closePromise]).then(() => {
           clearTimeout(timeout);
-          this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${code}`);
-          
+          this.appendTaskLog(taskId, 'INFO', `Process closed with exit code: ${exitCode}`);
+          this.appendTaskLog(taskId, 'INFO', `STDOUT length: ${stdout.length} bytes`);
+
           if (stderr) {
             this.logger.warn(`[${taskId}] ${this.name} execute stderr: ${stderr}`);
           }
@@ -365,8 +403,8 @@ Started: ${timestamp}
           // The parseProviderError method checks stderr/stdout for error patterns like
           // 'authentication', 'session limit', etc. to catch these cases.
           const providerError = this.parseProviderError(stderr, stdout);
-          if (code !== 0 || providerError.error) {
-            const errorMessage = providerError.message || stderr || `Exit code ${code}`;
+          if (exitCode !== 0 || providerError.error) {
+            const errorMessage = providerError.message || stderr || `Exit code ${exitCode}`;
             this.appendTaskLog(taskId, 'ERROR', `${this.name} CLI execute failed: ${errorMessage}`);
             this.logger.error(`[${taskId}] ${this.name} provider-level error detected: ${errorMessage}`);
             resolve({
@@ -385,7 +423,7 @@ Started: ${timestamp}
             content: stdout.trim(),
             provider: this.name,
             command,
-            success: true,
+            success: exitCode === 0,
             taskId,
           });
         });
@@ -398,7 +436,7 @@ Started: ${timestamp}
             provider: this.name,
             command,
             success: false,
-            error: error.code === 'ENOENT' ? 
+            error: error.code === 'ENOENT' ?
               this.getNotInstalledMessage() :
               error.message,
             taskId,
