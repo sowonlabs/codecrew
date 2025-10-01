@@ -14,35 +14,113 @@ export async function readStdin(): Promise<string | null> {
 
   return new Promise((resolve, reject) => {
     let data = '';
-    
+    let chunks = 0;
+    let dataTimeout: NodeJS.Timeout | null = null;
+
     // Set encoding to handle text properly
     process.stdin.setEncoding('utf8');
-    
+
+    // Debug log
+    const debug = process.env.DEBUG_STDIN === '1';
+    if (debug) {
+      console.error('[STDIN] Waiting for piped input...');
+    }
+
     // Read data chunks
-    process.stdin.on('data', (chunk) => {
+    const dataHandler = (chunk: string) => {
+      chunks++;
       data += chunk;
-    });
-    
+      if (debug) {
+        console.error(`[STDIN] Received chunk ${chunks}: "${chunk.substring(0, 50)}..."`);
+      }
+
+      // Reset timeout after each chunk - this allows for slow data arrival
+      if (dataTimeout) {
+        clearTimeout(dataTimeout);
+      }
+
+      // Check if this looks like the end of codecrew output
+      // (ends with "✅ Query completed successfully" or similar)
+      const looksComplete = /✅.*completed successfully\s*$/.test(data);
+
+      // Set a timeout for next chunk (if no more data comes, we're done)
+      // Shorter timeout if output looks complete, longer otherwise
+      const timeout = looksComplete ? 100 : 10*60_000;
+      dataTimeout = setTimeout(() => {
+        cleanup();
+        resolve(data.trim() || null);
+      }, timeout);
+    };
+
     // Handle end of input
-    process.stdin.on('end', () => {
+    const endHandler = () => {
+      cleanup();
       resolve(data.trim() || null);
-    });
-    
+    };
+
     // Handle errors
-    process.stdin.on('error', (error) => {
+    const errorHandler = (error: Error) => {
+      cleanup();
       reject(error);
-    });
-    
-    // Set a timeout to prevent hanging
-    const timeout = setTimeout(() => {
-      reject(new Error('Stdin read timeout'));
-    }, 5000);
-    
-    // Clear timeout when done
-    process.stdin.on('end', () => {
-      clearTimeout(timeout);
-    });
+    };
+
+    // Cleanup function to remove listeners
+    const cleanup = () => {
+      if (dataTimeout) {
+        clearTimeout(dataTimeout);
+        dataTimeout = null;
+      }
+      process.stdin.removeListener('data', dataHandler);
+      process.stdin.removeListener('end', endHandler);
+      process.stdin.removeListener('error', errorHandler);
+    };
+
+    process.stdin.on('data', dataHandler);
+    process.stdin.on('end', endHandler);
+    process.stdin.on('error', errorHandler);
+
+    // Initial timeout: if no data arrives in 30 seconds, assume no input
+    // This is longer to accommodate slow AI response times in piped codecrew processes
+    const initialTimeout = setTimeout(() => {
+      if (chunks === 0) {
+        if (debug) {
+          console.error('[STDIN] Timeout - no data received');
+        }
+        cleanup();
+        resolve(null);
+      }
+    }, 30000);
+
+    // Clear initial timeout when we get data or end
+    process.stdin.once('data', () => clearTimeout(initialTimeout));
+    process.stdin.once('end', () => clearTimeout(initialTimeout));
   });
+}
+
+/**
+ * Extract actual AI response from formatted output
+ * @param content - Raw piped content that may include formatting
+ * @returns Clean AI response
+ */
+function extractAIResponse(content: string): string {
+  const debug = process.env.DEBUG_STDIN === '1';
+
+  // Try to extract content between "📄 Response:" and next section marker
+  const responseMatch = content.match(/📄 Response:\s*\n[-─]+\s*\n([\s\S]*?)(?:\n\n📁|$)/);
+
+  if (debug) {
+    console.error(`[STDIN] Extract: input length=${content.length}, hasMatch=${!!responseMatch}`);
+    if (responseMatch && responseMatch[1]) {
+      console.error(`[STDIN] Extracted: "${responseMatch[1].substring(0, 100)}..."`);
+    }
+  }
+
+  if (responseMatch && responseMatch[1]) {
+    return responseMatch[1].trim();
+  }
+
+  // If no formatting found, return as-is (might be from --raw mode)
+  return content.trim();
 }
 
 /**
@@ -51,5 +129,8 @@ export async function readStdin(): Promise<string | null> {
  * @returns Formatted context string
  */
 export function formatPipedContext(pipedContent: string): string {
-  return `Previous step result:\n${pipedContent}\n\nPlease use this information as context for the current task.`;
+  // Extract the actual AI response if it's formatted output
+  const cleanContent = extractAIResponse(pipedContent);
+
+  return `Previous step result:\n${cleanContent}\n\nPlease use this information as context for the current task.`;
 }

@@ -1,0 +1,74 @@
+# CodeCrew Documents Configuration
+#
+# Define documents that can be referenced by AI agents.
+# Documents can be loaded immediately or lazily (on-demand).
+#
+# 3-Level Document System:
+# 1. documents.yaml (global, shared across projects)
+# 2. agents.yaml documents: section (project-level)
+# 3. agent.inline.documents (agent-specific)
+# Priority: agent.inline.documents > agents.yaml documents > documents.yaml
+
+documents:
+  # Example 1: Inline content (raw markdown)
+  # Simple string format - use | for multi-line content
+  quick-tips: |
+    # Quick Tips
+    - Use @agent:model to specify AI model
+    - Use q/x shortcuts for query/execute commands
+    - Check logs with: codecrew logs [taskId]
+
+  # Example 2: Object format with metadata (raw markdown)
+  coding-standards: |
+    # Coding Standards
+    
+    ## TypeScript
+    - Always use strict type checking
+    - Prefer interfaces over type aliases
+    - Use const assertions where appropriate
+    
+    ## Testing
+    - Write unit tests for all business logic
+    - Use descriptive test names
+    - Maintain >80% code coverage
+
+  # Example 3: Load from file path (immediate)
+  readme:
+    path: "documents/README.md"
+    summary: "CodeCrew main documentation"
+    type: "markdown"
+
+  # Example 4: Load from file path (lazy loading)
+  # Lazy loading is useful for large documents
+  agent-best-practices:
+    path: "documents/guides/agent-best-practices.md"
+    summary: "Best practices for creating AI agents"
+    type: "markdown"
+    lazy: true
+
+  # Example 5: Code examples
+  simple-agent-example:
+    path: "documents/examples/simple-agent.md"
+    summary: "Simple agent configuration example"
+    type: "markdown"
+    lazy: true
+
+# Template Variables in agents.yaml:
+#
+# system_prompt: |
+#   You are an assistant.
+#   
+#   <document name="quick-tips">
+#   {{{documents.quick-tips.content}}}
+#   </document>
+#   
+#   <toc>
+#   {{{documents.readme.toc}}}
+#   </toc>
+#   
+#   Summary: {{documents.readme.summary}}
+#
+# Available properties:
+# - {{{documents.name.content}}} - Full document content (unescaped)
+# - {{{documents.name.toc}}} - Table of contents (markdown headings only)
+# - {{documents.name.summary}} - Document summary (if defined)

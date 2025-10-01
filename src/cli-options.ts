@@ -7,18 +7,30 @@ export interface CliOptions {
   protocol: 'STDIO' | 'HTTP';
   port: number;
   allowTool: string[]; // Support for --allow-tool=terminal,files,web
+  raw: boolean; // Output only AI response (for piping)
   // CLI commands
   command?: string;
   query?: string | string[];
   execute?: string | string[];
   doctor?: boolean;
   config?: string;
+  // Init options
+  template?: string;
+  templateVersion?: string;
+  force?: boolean;
   // API keys removed for security - use environment variables or CLI tool authentication instead
 }
 
 export function parseCliOptions(): CliOptions {
   const parsed = yargs(hideBin(process.argv))
     .command('query [message...]', 'Query agents with a message', (yargs) => {
+      yargs.positional('message', {
+        description: 'Message to send to agents (supports @agent mentions). Multiple arguments will be joined.',
+        type: 'string',
+        array: true
+      });
+    })
+    .command('q [message...]', 'Shorthand for query', (yargs) => {
       yargs.positional('message', {
         description: 'Message to send to agents (supports @agent mentions). Multiple arguments will be joined.',
         type: 'string',
@@ -32,8 +44,37 @@ export function parseCliOptions(): CliOptions {
         array: true
       });
     })
+    .command('x [task...]', 'Shorthand for execute', (yargs) => {
+      yargs.positional('task', {
+        description: 'Task to execute with agents (supports @agent mentions). Multiple arguments will be joined.',
+        type: 'string',
+        array: true
+      });
+    })
     .command('doctor', 'Check AI provider status', () => {})
-    .command('init', 'Initialize CodeCrew project', () => {})
+    .command('init', 'Initialize CodeCrew project', (yargs) => {
+      yargs.option('template', {
+        alias: 't',
+        type: 'string',
+        default: 'default',
+        description: 'Template to use (default, minimal, development, production)'
+      });
+      yargs.option('template-version', {
+        type: 'string',
+        default: 'main',
+        description: 'Template version to download (main, v0.1.8, etc.)'
+      });
+      yargs.option('force', {
+        alias: 'f',
+        type: 'boolean',
+        default: false,
+        description: 'Overwrite existing configuration file'
+      });
+    })
+    .command('templates', 'Manage agent templates', (yargs) => {
+      yargs.command('list', 'List available templates');
+      yargs.command('update', 'Clear cache and re-download templates');
+    })
     .command('mcp', 'Start MCP server for IDE integration', () => {})
     .command('help', 'Show help', () => {})
     .option('install', {
@@ -73,6 +114,11 @@ export function parseCliOptions(): CliOptions {
         return value || [];
       }
     })
+    .option('raw', {
+      type: 'boolean',
+      default: false,
+      description: 'Output only AI response without formatting (useful for piping)'
+    })
     // API key options removed for security
     // Use environment variables or CLI tool authentication instead
     .help(false)
@@ -84,9 +130,12 @@ export function parseCliOptions(): CliOptions {
     protocol: parsed.protocol as 'STDIO' | 'HTTP',
     port: parsed.port,
     allowTool: parsed['allow-tool'] as string[] || [],
+    raw: parsed.raw,
     command: parsed._[0] as string,
-    query: Array.isArray(parsed.message) ? parsed.message.join(' ') : parsed.message as string,
-    execute: Array.isArray(parsed.task) ? parsed.task.join(' ') : parsed.task as string,
+    // Keep query as array for parallel processing support
+    query: Array.isArray(parsed.message) ? parsed.message : (parsed.message ? [parsed.message as string] : undefined),
+    // Keep execute as array for parallel processing support
+    execute: Array.isArray(parsed.task) ? parsed.task : (parsed.task ? [parsed.task as string] : undefined),
     doctor: parsed._[0] === 'doctor',
     config: parsed.config
   };

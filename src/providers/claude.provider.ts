@@ -30,10 +30,16 @@ export class ClaudeProvider extends BaseAIProvider {
     stderr: string,
     stdout: string,
   ): { error: boolean; message: string } {
-    const errorMessage = stderr || stdout;
+    // NOTE: This method is used to detect errors even when CLI tools return exit code 0.
+    // Some AI CLI tools incorrectly return success exit codes even when encountering errors.
+    // We check stderr first, as it's more likely to contain actual error messages.
+    // Be careful not to treat normal response content as errors.
+    
+    const combinedOutput = stderr || stdout; // Only for session limit check
 
-    if (errorMessage.includes('Session limit reached')) {
-      const resetMatch = errorMessage.match(/resets (\d+(?::\d+)?(?:am|pm))/i);
+    // Check for session limit (definite error)
+    if (combinedOutput.includes('Session limit reached')) {
+      const resetMatch = combinedOutput.match(/resets (\d+(?::\d+)?(?:am|pm))/i);
       const resetTime = resetMatch ? resetMatch[1] : 'later today';
       return {
         error: true,
@@ -41,7 +47,9 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
-    if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
+    // Check for authentication errors - only in stderr or at the start of output
+    // Avoid matching 'authentication' in response content by checking context
+    if (stderr && (stderr.includes('authentication required') || stderr.includes('Please run `claude login`'))) {
       return {
         error: true,
         message:
@@ -49,7 +57,9 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
-    if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+    // Check for network errors - ONLY in stderr, NOT in stdout (which contains AI response)
+    // stdout may contain words like "network" or "connection" in legitimate responses
+    if (stderr && (stderr.includes('network') || stderr.includes('connection'))) {
       return {
         error: true,
         message:
@@ -57,6 +67,7 @@ export class ClaudeProvider extends BaseAIProvider {
       };
     }
 
+    // Only treat stderr as error if there's no stdout (empty response)
     if (stderr && !stdout) {
       return { error: true, message: stderr };
     }
