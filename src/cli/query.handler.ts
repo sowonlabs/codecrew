@@ -184,22 +184,59 @@ export async function handleQuery(app: any, args: CliOptions) {
 
     } else {
       // Multiple queries (parallel)
+      
+      // Add user messages to conversation history if thread is specified
+      if (conversationProvider && threadId) {
+        for (const pq of parsedQueries) {
+          await conversationProvider.addMessage(
+            threadId, 
+            os.userInfo().username, 
+            `@${pq.agentId}${pq.model ? `:${pq.model}` : ''} ${pq.query}`, 
+            false
+          );
+        }
+      }
+      
       if (!args.raw) {
         console.log(`🚀 Querying ${parsedQueries.length} agents in parallel:`);
         parsedQueries.forEach((pq, index) => {
           console.log(`   ${index + 1}. @${pq.agentId}: ${pq.query.substring(0, 50)}${pq.query.length > 50 ? '...' : ''}`);
         });
+        if (threadId) {
+          console.log(`🔗 Thread: ${threadId}`);
+        }
         console.log('─'.repeat(60));
       }
+
+      // Build combined context for all queries
+      const combinedContext = [
+        conversationContext,
+        contextFromPipe
+      ].filter(Boolean).join('\n\n');
 
       const queries = parsedQueries.map(pq => ({
         agentId: pq.agentId,
         query: pq.query,
-        context: contextFromPipe,
+        context: combinedContext || undefined,
         model: pq.model
       }));
 
       result = await codeCrewTool.queryAgentParallel({ queries });
+
+      // Add assistant responses to conversation history if thread is specified
+      if (conversationProvider && threadId && result.results && Array.isArray(result.results)) {
+        for (const agentResult of result.results) {
+          if (agentResult.success && agentResult.response) {
+            const agentName = `${agentResult.agentId}${agentResult.model ? `:${agentResult.model}` : ''}`;
+            await conversationProvider.addMessage(
+              threadId,
+              agentName,
+              agentResult.response,
+              true
+            );
+          }
+        }
+      }
 
       // 5. Format and output results for parallel agents
       if (args.raw) {
