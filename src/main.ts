@@ -9,6 +9,8 @@ import { getErrorMessage, getErrorStack } from './utils/error-utils';
 import { CLIHandler } from './cli/cli.handler';
 import { SlackBot } from './slack/slack-bot';
 import { CodeCrewTool } from './codecrew.tool';
+import { ConfigService } from './services/config.service';
+import { AIProviderService } from './ai-provider.service';
 
 const logger = new Logger('Bootstrap');
 const args = parseCliOptions();
@@ -162,11 +164,17 @@ async function runSlackBot() {
       logger: args.log ? new StderrLogger('CodeCrewSlack', { timestamp: true }) : false,
     });
 
-    // Get CodeCrewTool from context
+    // Get CodeCrewTool, ConfigService, and AIProviderService from context
     const codeCrewTool = app.get(CodeCrewTool);
+    const configService = app.get(ConfigService);
+    const aiProviderService = app.get(AIProviderService);
 
-    // Create and start Slack Bot
-    const slackBot = new SlackBot(codeCrewTool);
+    // Get default agent from CLI options (defaults to 'claude')
+    const defaultAgent = args.slackAgent || 'claude';
+    logger.log(`Using default agent for Slack: ${defaultAgent}`);
+
+    // Create and start Slack Bot (validates agent exists)
+    const slackBot = new SlackBot(codeCrewTool, configService, aiProviderService, defaultAgent);
     await slackBot.start();
 
     // Handle shutdown

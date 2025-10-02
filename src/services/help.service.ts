@@ -95,7 +95,11 @@ their own specialization, and get results in parallel.
     this.showCommandHelp(
       'slack',
       'Starts the Slack bot integration for team collaboration.',
-      ['codecrew slack'],
+      [
+        'codecrew slack',
+        'codecrew slack --agent gemini',
+        'codecrew slack --agent copilot'
+      ],
     );
 
     this.showCommandHelp('help', 'Shows this help message.', ['codecrew help']);

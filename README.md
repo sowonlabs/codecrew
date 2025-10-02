@@ -305,11 +305,15 @@ codecrew execute "@gemini implement the suggested improvements"
 Run CodeCrew as a Slack bot for team collaboration:
 
 ```bash
-codecrew slack                        # Start Slack bot with Socket Mode
+codecrew slack                        # Start Slack bot with Claude (default)
+codecrew slack --agent gemini         # Use Gemini for conversations
+codecrew slack --agent copilot        # Use GitHub Copilot for conversations
+codecrew slack --agent custom_agent   # Use any custom agent from agents.yaml
 ```
 
 **Features:**
-- ✅ **Natural conversation** with Claude AI
+- ✅ **Natural conversation** with your chosen AI agent
+- ✅ **Configurable agent** - Choose between Claude, Gemini, Copilot, or custom agents
 - ✅ **Thread history** - Maintains context within Slack threads
 - ✅ **@mentions** - Responds to direct mentions and DMs
 - ✅ **Clean responses** - Minimal technical metadata, focus on content

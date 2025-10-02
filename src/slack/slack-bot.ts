@@ -3,16 +3,40 @@ import { Logger } from '@nestjs/common';
 import { CodeCrewTool } from '../codecrew.tool';
 import { SlackMessageFormatter } from './formatters/message.formatter';
 import { SlackConversationHistoryProvider } from '../conversation/slack-conversation-history.provider';
+import { ConfigService } from '../services/config.service';
+import { AIProviderService } from '../ai-provider.service';
 
 export class SlackBot {
   private readonly logger = new Logger(SlackBot.name);
   private app: App;
   private formatter: SlackMessageFormatter;
   private conversationHistory: SlackConversationHistoryProvider;
+  private defaultAgent: string;
 
-  constructor(private readonly codeCrewTool: CodeCrewTool) {
+  constructor(
+    private readonly codeCrewTool: CodeCrewTool,
+    private readonly configService: ConfigService,
+    private readonly aiProviderService: AIProviderService,
+    defaultAgent: string = 'claude'
+  ) {
+    // Validate agent exists (check both built-in providers and custom agents)
+    const builtinProviders = this.aiProviderService.getAvailableProviders();
+    const customAgents = this.configService.getAllAgentIds();
+    const allAvailableAgents = [...builtinProviders, ...customAgents];
+    
+    if (!allAvailableAgents.includes(defaultAgent)) {
+      const errorMsg = `❌ Agent '${defaultAgent}' not found. Available agents: ${allAvailableAgents.join(', ')}`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    this.defaultAgent = defaultAgent;
     this.formatter = new SlackMessageFormatter();
     this.conversationHistory = new SlackConversationHistoryProvider();
+
+    this.logger.log(`🤖 Slack bot initialized with default agent: ${this.defaultAgent}`);
+    this.logger.log(`📋 Built-in providers: ${builtinProviders.join(', ')}`);
+    this.logger.log(`📋 Custom agents: ${customAgents.join(', ')}`);
 
     this.app = new App({
       token: process.env.SLACK_BOT_TOKEN,
@@ -142,10 +166,10 @@ export class SlackBot {
           }
         }
 
-        // Use built-in Claude agent for natural conversation
+        // Use configured default agent for natural conversation
         // (mcp_test_agent is only for testing MCP tools, not for chat)
         const result = await this.codeCrewTool.queryAgent({
-          agentId: 'claude',
+          agentId: this.defaultAgent,
           query: userRequest,
           context: contextText || undefined, // Only pass context if we have thread history
         });
@@ -158,8 +182,8 @@ export class SlackBot {
           (result.content && result.content[0] ? result.content[0].text : 'No response');
 
         const blocks = this.formatter.formatExecutionResult({
-          agent: (result as any).agent || 'claude',
-          provider: (result as any).provider || 'claude',
+          agent: (result as any).agent || this.defaultAgent,
+          provider: (result as any).provider || this.defaultAgent,
           taskId: (result as any).taskId || 'unknown',
           response: responseText,
           success: (result as any).success !== false,

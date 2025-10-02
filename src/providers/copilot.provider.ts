@@ -24,7 +24,7 @@ export class CopilotProvider extends BaseAIProvider {
   }
 
   protected getPromptInArgs(): boolean {
-    // Copilot CLI requires prompt as command line argument, not stdin
+    // Copilot CLI requires prompt as command line argument with -p option
     return true;
   }
 
