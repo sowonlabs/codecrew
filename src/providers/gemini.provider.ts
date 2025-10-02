@@ -16,17 +16,17 @@ export class GeminiProvider extends BaseAIProvider {
   }
 
   protected getDefaultArgs(): string[] {
-    return ['-o', 'json', '-p']; // query mode by default
+    return ['-o', 'json']; // query mode by default - removed '-p' flag
   }
 
   protected getExecuteArgs(): string[] {
     // Gemini does not actively use tools without --yolo, so it is included by default in Execute mode
     // If the user specifies other options in agents.yaml, they will take precedence
-    return ['-o', 'json', '--yolo', '-p'];
+    return ['-o', 'json', '--yolo'];
   }
 
   protected getPromptInArgs(): boolean {
-    return true; // Gemini puts prompt in args for --yolo mode
+    return false; // Gemini uses stdin for prompts (safer for multi-line and special characters)
   }
 
   protected getNotInstalledMessage(): string {

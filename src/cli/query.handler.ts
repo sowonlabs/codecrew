@@ -90,15 +90,28 @@ export async function handleQuery(app: any, args: CliOptions) {
     }
 
     const parsedQueries: ParsedQuery[] = [];
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/;
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g; // Add global flag
 
     for (const queryStr of queryInput) {
-      const match = queryStr.match(mentionRegex);
-      if (match && match[1]) {
-        const agentId: string = match[1];
-        const model: string | undefined = match[2]; // Capture model if provided
-        const query = queryStr.replace(mentionRegex, '').trim();
-        if (query) {
+      // Find all @mentions in this query string
+      const matches = [...queryStr.matchAll(mentionRegex)];
+      
+      if (matches.length === 0) {
+        continue; // Skip if no mentions found
+      }
+
+      // Remove all @mentions to get the actual query text
+      const query = queryStr.replace(/@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g, '').trim();
+      
+      if (!query) {
+        continue; // Skip if no query text after removing mentions
+      }
+
+      // Create a separate query for each agent mention
+      for (const match of matches) {
+        const agentId = match[1];
+        const model = match[2]; // Capture model if provided
+        if (agentId) {
           parsedQueries.push({ agentId, query, model });
         }
       }
