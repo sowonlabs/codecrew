@@ -230,3 +230,29 @@ agents:
         Impact: Non-breaking, improves performance
         ```
 
+  - id: "mastra_dev"
+    name: "Mastra Developer"
+    role: "developer"
+    team: "Development Team"
+    description: "Specialized developer for analyzing and improving the Mastra workflow automation product"
+    working_directory: "/Users/doha/git/mastra"
+    capabilities:
+      - "code_analysis"
+      - "architecture_review"
+      - "workflow_design"
+      - "feature_implementation"
+      - "debugging"
+    options:
+      query:
+        - "--add-dir=/Users/doha/git/mastra"
+        - "--verbose"
+      execute:
+        - "--add-dir=/Users/doha/git/mastra"
+        - "--verbose"
+    inline:
+      type: "agent"
+      provider: "claude"
+      model: "sonnet"  # Claude Sonnet (stable version)
+      system_prompt: |
+        You are a senior developer specialized in analyzing and working with the SowonFlow project.
+        

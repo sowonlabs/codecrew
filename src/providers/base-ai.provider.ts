@@ -239,8 +239,22 @@ Started: ${timestamp}
           }
 
           this.appendTaskLog(taskId, 'INFO', `${this.name} query completed successfully`);
+
+          // Try to parse JSON output if available
+          let parsedContent = stdout.trim();
+          try {
+            const jsonOutput = JSON.parse(stdout);
+            // If JSON parsing succeeds, keep the original JSON string
+            // The consumer will handle JSON parsing if needed
+            parsedContent = stdout.trim();
+            this.appendTaskLog(taskId, 'INFO', 'JSON output detected and validated');
+          } catch (jsonError) {
+            // Not JSON, use as plain text
+            this.appendTaskLog(taskId, 'INFO', 'Plain text output (not JSON)');
+          }
+
           resolve({
-            content: stdout.trim(),
+            content: parsedContent,
             provider: this.name,
             command,
             success: exitCode === 0,
@@ -420,8 +434,22 @@ Started: ${timestamp}
           }
 
           this.appendTaskLog(taskId, 'INFO', `${this.name} execute completed successfully`);
+
+          // Try to parse JSON output if available
+          let parsedContent = stdout.trim();
+          try {
+            const jsonOutput = JSON.parse(stdout);
+            // If JSON parsing succeeds, keep the original JSON string
+            // The consumer will handle JSON parsing if needed
+            parsedContent = stdout.trim();
+            this.appendTaskLog(taskId, 'INFO', 'JSON output detected and validated');
+          } catch (jsonError) {
+            // Not JSON, use as plain text
+            this.appendTaskLog(taskId, 'INFO', 'Plain text output (not JSON)');
+          }
+
           resolve({
-            content: stdout.trim(),
+            content: parsedContent,
             provider: this.name,
             command,
             success: exitCode === 0,

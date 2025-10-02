@@ -14,6 +14,7 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { ParallelProcessingService } from './services/parallel-processing.service';
 import { TaskManagementService } from './services/task-management.service';
 import { ResultFormatterService } from './services/result-formatter.service';
+import { ToolCallService } from './services/tool-call.service';
 import { TemplateService } from './services/template.service';
 import { DocumentLoaderService } from './services/document-loader.service';
 import { InitHandler } from './cli/init.handler';
@@ -54,6 +55,7 @@ export class AppModule {
         ResultFormatterService,
         TemplateService,
         DocumentLoaderService,
+        ToolCallService,
         // CLI Handlers
         InitHandler,
         DoctorHandler,
