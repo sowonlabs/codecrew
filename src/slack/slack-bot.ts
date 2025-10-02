@@ -91,11 +91,16 @@ export class SlackBot {
 
       this.logger.log(`🚀 Processing Slack request from user ${message.user}`);
 
-      // Send loading message
-      const loadingMsg = await say({
-        text: '⏳ Processing your request...',
-        thread_ts: message.ts,
-      });
+      // Add "processing" reaction to original message (eyes = watching/processing)
+      try {
+        await client.reactions.add({
+          channel: message.channel,
+          timestamp: message.ts,
+          name: 'eyes', // 👀 emoji
+        });
+      } catch (reactionError) {
+        this.logger.warn(`Could not add reaction: ${reactionError}`);
+      }
 
       try {
         // Use MCP Test Agent which has MCP tools enabled
@@ -120,19 +125,52 @@ export class SlackBot {
           success: true,
         });
 
-        await client.chat.update({
-          channel: message.channel,
-          ts: loadingMsg.ts,
+        // Send result as thread reply
+        await say({
           text: '✅ Completed!',
           blocks: blocks,
+          thread_ts: message.ts,
         });
+
+        // Remove "processing" reaction and add "completed" reaction
+        try {
+          await client.reactions.remove({
+            channel: message.channel,
+            timestamp: message.ts,
+            name: 'eyes',
+          });
+          await client.reactions.add({
+            channel: message.channel,
+            timestamp: message.ts,
+            name: 'white_check_mark', // ✅ emoji
+          });
+        } catch (reactionError) {
+          this.logger.warn(`Could not update reaction: ${reactionError}`);
+        }
       } catch (error: any) {
         this.logger.error(`Error executing request:`, error);
-        await client.chat.update({
-          channel: message.channel,
-          ts: loadingMsg.ts,
+        
+        // Send error message as thread reply
+        await say({
           text: `❌ Error: ${error.message}`,
+          thread_ts: message.ts,
         });
+
+        // Remove "processing" reaction and add "error" reaction
+        try {
+          await client.reactions.remove({
+            channel: message.channel,
+            timestamp: message.ts,
+            name: 'eyes',
+          });
+          await client.reactions.add({
+            channel: message.channel,
+            timestamp: message.ts,
+            name: 'x', // ❌ emoji
+          });
+        } catch (reactionError) {
+          this.logger.warn(`Could not update reaction: ${reactionError}`);
+        }
       }
     } catch (error: any) {
       this.logger.error(`Error handling command:`, error);
