@@ -1,6 +1,6 @@
 {
   "name": "codecrew",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "license": "MIT",
   "description": "CodeCrew: A Model Context Protocol (MCP) server for AI-powered code analysis and multi-agent collaboration",
   "main": "dist/main.js",
@@ -34,7 +34,7 @@
   },
   "scripts": {
     "build": "nest build",
-    "postbuild": "node -e \"const fs = require('fs'); const content = fs.readFileSync('dist/main.js', 'utf8'); if (!content.startsWith('#!')) { fs.writeFileSync('dist/main.js', '#!/usr/bin/env node\\n' + content); console.log('✅ Added shebang to dist/main.js'); }\"",
+    "postbuild": "node -e \"const fs = require('fs'); let content = fs.readFileSync('dist/main.js', 'utf8'); const lines = content.split('\\n'); if (lines[0] === '#!/usr/bin/env node' && lines[1] === '#!/usr/bin/env node') { lines.shift(); content = lines.join('\\n'); fs.writeFileSync('dist/main.js', content); console.log('✅ Removed duplicate shebang'); } else if (!content.startsWith('#!/usr/bin/env node')) { fs.writeFileSync('dist/main.js', '#!/usr/bin/env node\\n' + content); console.log('✅ Added shebang to dist/main.js'); } else { console.log('✅ Shebang already present'); }\"",
     "build:install": "npm run build && npm install -g .",
     "start": "node dist/main.js",
     "start:mcp": "node dist/main.js mcp",
