@@ -55,6 +55,7 @@
     "prepack": "npm run build && node -e \"const fs = require('fs'); const shebang = '#!/usr/bin/env node\\n'; const content = fs.readFileSync('dist/main.js', 'utf8'); fs.writeFileSync('dist/main.js', shebang + content);\""
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
@@ -84,7 +85,8 @@
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
     "@types/express": "^5.0.3",
-    "@types/node": "^20.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.19",
     "@types/yargs": "^17.0.0",
     "@vitest/ui": "^1.0.0",
     "dotenv-cli": "^6.0.0",

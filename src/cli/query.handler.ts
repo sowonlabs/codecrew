@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import { CliOptions } from '../cli-options';
 import { CodeCrewTool } from '../codecrew.tool';
 import { readStdin, formatPipedContext } from '../utils/stdin-utils';
+import { ConversationProviderFactory, CliConversationHistoryProvider } from '../conversation';
+import * as os from 'os';
 
 const logger = new Logger('QueryHandler');
 
@@ -25,7 +27,7 @@ export async function handleQuery(app: any, args: CliOptions) {
     // Get query input - support both single string and array of separate queries
     const queryInput = Array.isArray(args.query) ? args.query : [args.query];
 
-    // 2. Check for piped input (stdin) and convert to context
+    // Check for piped input (stdin) and convert to context
     const pipedInput = await readStdin();
     const contextFromPipe = pipedInput ? formatPipedContext(pipedInput) : undefined;
 
@@ -33,7 +35,51 @@ export async function handleQuery(app: any, args: CliOptions) {
       console.log('📥 Received piped input - using as context');
     }
 
-    // 3. Get CodeCrewTool from app context
+    // Set up conversation history if thread is specified
+    let conversationProvider: CliConversationHistoryProvider | null = null;
+    let threadId: string | null = null;
+    let conversationContext = '';
+
+    if (args.thread) {
+      const providerFactory = new ConversationProviderFactory();
+      conversationProvider = providerFactory.getProvider('cli') as CliConversationHistoryProvider;
+      await conversationProvider.initialize();
+      
+      threadId = args.thread;
+      const exists = await conversationProvider.hasHistory(threadId);
+      
+      if (!exists) {
+        if (!args.raw) {
+          console.log(`📝 Creating new conversation thread: ${threadId}`);
+        }
+        await conversationProvider.createThread(threadId);
+      } else {
+        if (!args.raw) {
+          console.log(`🔗 Continuing conversation thread: ${threadId}`);
+        }
+      }
+
+      // Fetch conversation history
+      const thread = await conversationProvider.fetchHistory(threadId, {
+        limit: 20,
+        maxContextLength: 4000,
+      });
+
+      // For built-in agents, we'll handle conversation history via template system
+      // For custom agents, use the traditional context method
+      if (thread.messages.length > 0) {
+        conversationContext = await conversationProvider.formatForAI(thread, {
+          excludeCurrent: true,
+        });
+        
+        // Format for built-in agents with security key authentication
+        if (conversationContext.trim()) {
+          conversationContext = `Previous conversation context from thread "${threadId}":\n${conversationContext}`;
+        }
+      }
+    }
+
+    // Get CodeCrewTool from app context
     const codeCrewTool = app.get(CodeCrewTool);
 
     // Parse each query argument separately
@@ -81,20 +127,39 @@ export async function handleQuery(app: any, args: CliOptions) {
       }
       const { agentId, query, model } = firstQuery;
 
+      // Add user message to conversation history if thread is specified
+      if (conversationProvider && threadId) {
+        await conversationProvider.addMessage(threadId, os.userInfo().username, query, false);
+      }
+
       if (!args.raw) {
         console.log(`📋 Task: ${query}`);
         console.log(`🤖 Agent: @${agentId}${model ? `:${model}` : ''}`);
+        if (threadId) {
+          console.log(`🔗 Thread: ${threadId}`);
+        }
         console.log('');
         console.log(`🔎 Querying single agent: @${agentId}${model ? `:${model}` : ''}`);
         console.log('─'.repeat(60));
       }
 
+      // Build combined context
+      const combinedContext = [
+        conversationContext,
+        contextFromPipe
+      ].filter(Boolean).join('\n\n');
+
       result = await codeCrewTool.queryAgent({
         agentId: agentId,
         query: query,
-        context: contextFromPipe,
+        context: combinedContext || undefined,
         model: model
       });
+
+      // Add assistant response to conversation history if thread is specified
+      if (conversationProvider && threadId && result.response) {
+        await conversationProvider.addMessage(threadId, 'codecrew', result.response, true);
+      }
 
       // 5. Format and output results for single agent
       if (args.raw) {

@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import { CliOptions } from '../cli-options';
 import { CodeCrewTool } from '../codecrew.tool';
 import { readStdin, formatPipedContext } from '../utils/stdin-utils';
+import { ConversationProviderFactory, CliConversationHistoryProvider } from '../conversation';
+import * as os from 'os';
 
 const logger = new Logger('ExecuteHandler');
 
@@ -17,10 +19,35 @@ export async function handleExecute(app: any, args: CliOptions) {
     console.log('Usage: codecrew execute "<task>"');
     console.log('Example: codecrew execute "@frontend @backend implement login"');
     console.log('Example (parallel): codecrew execute "@claude task1" "@claude task2"');
+    console.log('Example (with thread): codecrew execute "@claude implement login" --thread "auth-feature"');
     process.exit(1);
   }
 
   try {
+    // Initialize conversation provider if thread is specified
+    let conversationProvider: CliConversationHistoryProvider | undefined;
+    let conversationContext = '';
+    
+    if (args.thread) {
+      const conversationFactory = app.get(ConversationProviderFactory);
+      conversationProvider = conversationFactory.createCliProvider({
+        platform: 'cli',
+        sessionId: args.thread,
+        userId: os.userInfo().username
+      });
+
+      // Get conversation history and format for context
+      if (conversationProvider) {
+        const history = await conversationProvider.fetchHistory(args.thread);
+        const formattedHistory = await conversationProvider.formatForAI(history);
+        
+        if (formattedHistory && formattedHistory.trim()) {
+          conversationContext = `Previous conversation context from thread "${args.thread}":\n${formattedHistory}\n\n`;
+          logger.log(`Loaded conversation context for thread: ${args.thread}`);
+        }
+      }
+    }
+
     // Get execute input - support both single string and array of separate tasks
     const executeInput = Array.isArray(args.execute) ? args.execute : [args.execute];
 
@@ -77,18 +104,45 @@ export async function handleExecute(app: any, args: CliOptions) {
       const { agentId, task, model } = firstTask;
       console.log(`📋 Task: ${task}`);
       console.log(`🤖 Agent: @${agentId}${model ? `:${model}` : ''}`);
+      if (args.thread) {
+        console.log(`🧵 Thread: ${args.thread}`);
+      }
       console.log('');
       console.log(`⚡ Executing task with single agent: @${agentId}${model ? `:${model}` : ''}`);
       console.log('────────────────────────────────────────────────────────────');
       console.log('');
 
+      // Combine conversation context with current task
+      const enhancedTask = conversationContext 
+        ? `${conversationContext}Current task: ${task}`
+        : task;
+
       const result = await codeCrewTool.executeAgent({
         agentId: agentId,
-        task: task,
+        task: enhancedTask,
         projectPath: process.cwd(),
         context: contextFromPipe,
         model: model
       });
+
+      // Save to conversation history if thread is specified
+      if (conversationProvider && args.thread) {
+        await conversationProvider.addMessage(
+          args.thread,
+          os.userInfo().username,
+          task,
+          false
+        );
+
+        if (result.success && result.content) {
+          await conversationProvider.addMessage(
+            args.thread,
+            `${agentId}${model ? `:${model}` : ''}`,
+            result.content,
+            true
+          );
+        }
+      }
 
       // Format and display result
       const status = result.success ? '🟢 Status: Success' : '🔴 Status: Failed';
@@ -117,18 +171,51 @@ export async function handleExecute(app: any, args: CliOptions) {
       parsedTasks.forEach((pt, index) => {
         console.log(`   ${index + 1}. @${pt.agentId}: ${pt.task.substring(0, 50)}${pt.task.length > 50 ? '...' : ''}`);
       });
+      if (args.thread) {
+        console.log(`🧵 Thread: ${args.thread}`);
+      }
       console.log('────────────────────────────────────────────────────────────');
       console.log('');
 
       const tasks = parsedTasks.map(pt => ({
         agentId: pt.agentId,
-        task: pt.task,
+        task: conversationContext ? `${conversationContext}Current task: ${pt.task}` : pt.task,
         projectPath: process.cwd(),
         context: contextFromPipe,
         model: pt.model
       }));
 
+      // Save user tasks to conversation history if thread is specified
+      if (conversationProvider && args.thread) {
+        const combinedUserTask = parsedTasks.map(pt => `@${pt.agentId}: ${pt.task}`).join('\n');
+        await conversationProvider.addMessage(
+          args.thread,
+          os.userInfo().username,
+          combinedUserTask,
+          false
+        );
+      }
+
       const result = await codeCrewTool.executeAgentParallel({ tasks });
+
+      // Save successful results to conversation history if thread is specified
+      if (conversationProvider && args.thread && result.results) {
+        for (const agentResult of result.results) {
+          if (agentResult.success && agentResult.content) {
+            const responseText = agentResult.implementation || 
+                              (agentResult.content && agentResult.content[0]?.text) || 
+                              agentResult.response || 
+                              'No response content';
+            
+            await conversationProvider.addMessage(
+              args.thread,
+              `${agentResult.agent}${agentResult.model ? `:${agentResult.model}` : ''}`,
+              responseText,
+              true
+            );
+          }
+        }
+      }
       
       // Format and display results
       console.log(`📊 Parallel Execution Results:`);

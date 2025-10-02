@@ -19,6 +19,11 @@ export interface TemplateContext {
   };
   /** Query/execution mode */
   mode?: 'query' | 'execute';
+  /** Conversation messages for history */
+  messages?: Array<{
+    text: string;
+    isAssistant: boolean;
+  }>;
   /** Additional custom variables */
   vars?: Record<string, any>;
 }

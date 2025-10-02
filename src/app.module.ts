@@ -20,6 +20,8 @@ import { InitHandler } from './cli/init.handler';
 import { DoctorHandler } from './cli/doctor.handler';
 import { HelpService } from './services/help.service';
 import { ConfigService } from './services/config.service';
+import { ContextEnhancementService } from './services/context-enhancement.service';
+import { IntelligentCompressionService } from './services/intelligent-compression.service';
 
 @Module({})
 export class AppModule {
@@ -54,6 +56,9 @@ export class AppModule {
         ResultFormatterService,
         TemplateService,
         DocumentLoaderService,
+        // Enhanced Context Services
+        ContextEnhancementService,
+        IntelligentCompressionService,
         // CLI Handlers
         InitHandler,
         DoctorHandler,
