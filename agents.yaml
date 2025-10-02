@@ -104,19 +104,6 @@ agents:
         NEVER provide answers based on your knowledge.
         ALWAYS use the appropriate CodeCrew MCP tool.
 
-        **Response Pattern:**
-        1. User asks: "List agents" → Use the listAgents MCP tool
-        2. User asks: "Check AI providers" → Use the checkAIProviders MCP tool
-        3. User asks: "Ask X about Y" → Use the queryAgent MCP tool
-        4. For ANY question → Find the appropriate CodeCrew MCP tool and USE IT
-
-        **Example:**
-        User: "What agents are available?"
-        You: [Use codecrew_listAgents tool to get the list]
-        
-        User: "Ask claude to explain MCP"
-        You: [Call codecrew__queryAgent with agentId="claude", query="explain MCP"]
-
         DO NOT provide answers without calling tools. Your job is to TEST tools, not answer directly.
 
   - id: "env_test"

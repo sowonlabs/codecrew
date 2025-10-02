@@ -16,9 +16,8 @@ export class SlackMessageFormatter {
   formatExecutionResult(result: ExecutionResult): (Block | KnownBlock)[] {
     const blocks: (Block | KnownBlock)[] = [];
 
-    // Response/Error (Main content first!)
     if (result.success) {
-      // Truncate long responses for Slack
+      // Success: Show only the response content (clean!)
       const response = this.truncateForSlack(result.response, 2500);
 
       blocks.push({
@@ -29,6 +28,7 @@ export class SlackMessageFormatter {
         },
       });
     } else {
+      // Error: Show error message with metadata
       blocks.push({
         type: 'section',
         text: {
@@ -36,18 +36,18 @@ export class SlackMessageFormatter {
           text: `❌ *Error*\n\`\`\`${result.error || 'Unknown error'}\`\`\``,
         },
       });
-    }
 
-    // Context (compact metadata at the bottom)
-    blocks.push({
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `${result.success ? '✅' : '❌'} *${result.agent}* (${result.provider}) · \`${result.taskId}\``,
-        },
-      ],
-    });
+      // Add metadata context only on error
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Agent: *${result.agent}* (${result.provider}) · Task ID: \`${result.taskId}\``,
+          },
+        ],
+      });
+    }
 
     return blocks;
   }

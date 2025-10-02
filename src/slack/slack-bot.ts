@@ -109,8 +109,8 @@ export class SlackBot {
         // Initialize conversation history provider with Slack client
         this.conversationHistory.initialize(client);
 
-        // Build context with thread history
-        let contextText = `Slack user: ${message.user}, Channel: ${message.channel}`;
+        // Build context with thread history (clean, no internal metadata)
+        let contextText = '';
 
         // Get thread timestamp (parent message or current message)
         const threadTs = message.thread_ts || message.ts;
@@ -127,12 +127,12 @@ export class SlackBot {
             });
 
             if (thread.messages.length > 0) {
-              const historyContext = this.conversationHistory.formatForAI(thread, {
+              const historyContext = await this.conversationHistory.formatForAI(thread, {
                 excludeCurrent: true,
               });
 
               if (historyContext) {
-                contextText += '\n\n' + historyContext;
+                contextText = historyContext; // Use only clean history, no metadata
                 this.logger.log(`📚 Including ${thread.messages.length} previous messages in context`);
               }
             }
@@ -142,26 +142,28 @@ export class SlackBot {
           }
         }
 
-        // Use MCP Test Agent which has MCP tools enabled
+        // Use built-in Claude agent for natural conversation
+        // (mcp_test_agent is only for testing MCP tools, not for chat)
         const result = await this.codeCrewTool.queryAgent({
-          agentId: 'mcp_test_agent',
+          agentId: 'claude',
           query: userRequest,
-          context: contextText,
+          context: contextText || undefined, // Only pass context if we have thread history
         });
 
         this.logger.log(`📦 Received result from CodeCrew MCP`);
 
-        // Extract text from MCP response format
-        const responseText = result.content && result.content[0]
-          ? result.content[0].text
-          : 'No response';
+        // Extract actual AI response from MCP result
+        // Use the 'response' field which contains the clean AI response
+        const responseText = (result as any).response || 
+          (result.content && result.content[0] ? result.content[0].text : 'No response');
 
         const blocks = this.formatter.formatExecutionResult({
-          agent: 'claude',
-          provider: 'claude',
+          agent: (result as any).agent || 'claude',
+          provider: (result as any).provider || 'claude',
           taskId: (result as any).taskId || 'unknown',
           response: responseText,
-          success: true,
+          success: (result as any).success !== false,
+          error: (result as any).error,
         });
 
         // Send result as thread reply

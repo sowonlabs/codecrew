@@ -488,19 +488,10 @@ Query: ${query}`;
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query completed. Success: ${response.success}` });
       this.taskManagementService.completeTask(taskId, response, response.success);
 
-      // Compose MCP response text
-      const responseText = `🤖 **Agent Query Response (Read-Only Mode)**
-
-**Task ID:** ${taskId}
-**Agent:** ${agentId} (${response.provider})
-**Query:** ${query}
-**Working Directory:** ${workingDir}
-
-**Agent Response:**
-${response.success ? response.content : `❌ Query Failed: ${response.error}`}
-
-Use \`getTaskLogs\` with taskId "${taskId}" to see detailed execution logs.
-`;
+      // Compose MCP response text (simple format for Slack)
+      const responseText = response.success 
+        ? response.content 
+        : `❌ **Error**\n\`\`\`${response.error}\`\`\`\n\nAgent: ${agentId} (${response.provider}) · Task ID: \`${taskId}\``;
 
       return {
         content: [
