@@ -386,6 +386,7 @@ agents:
     query: string;
     context?: string;
     model?: string;
+    messages?: Array<{ text: string; isAssistant: boolean }>;
   }) {
     // Generate task ID and start tracking
     const taskId = this.taskManagementService.createTask({
@@ -397,7 +398,7 @@ agents:
     this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Started query agent ${args.agentId}` });
 
     try {
-      const { agentId, query, context, model } = args;
+      const { agentId, query, context, model, messages } = args;
       
       this.logger.log(`[${taskId}] Querying agent ${agentId}: ${query.substring(0, 50)}...`);
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
@@ -435,6 +436,31 @@ Please check the agent ID and try again.`
       // Use current directory to avoid non-existent directory issues
       const workingDir = agent.workingDirectory || process.cwd();
       let systemPrompt = agent.systemPrompt || agent.description || `You are an expert ${agentId}.`;
+
+      // If agent has a system prompt with template variables and messages are provided, process template
+      if (systemPrompt && messages && messages.length > 0) {
+        const { processDocumentTemplate } = await import('./utils/template-processor');
+        const securityKey = this.generateSecurityKey();
+        
+        const templateContext: TemplateContext = {
+          env: process.env,
+          agent: {
+            id: agent.id,
+            name: agent.name || agent.id,
+            provider: (Array.isArray(agent.provider) ? agent.provider[0] : agent.provider) || 'claude',
+            model: model || agent.inline?.model,
+            workingDirectory: workingDir,
+          },
+          mode: 'query',
+          messages: messages, // Pass conversation messages for template
+          tools: this.buildToolsContext(),
+          vars: {
+            security_key: securityKey,
+          },
+        };
+        
+        systemPrompt = await processDocumentTemplate(systemPrompt, this.documentLoaderService, templateContext);
+      }
 
       // Add context information
       systemPrompt += `
@@ -1122,6 +1148,8 @@ Execution Mode: Implementation guidance could not be provided.`
       query: string;
       projectPath?: string;
       context?: string;
+      model?: string;
+      messages?: Array<{ text: string; isAssistant: boolean }>;
     }>;
   }) {
     try {
