@@ -172,11 +172,16 @@ SLACK_SIGNING_SECRET=your-actual-signing-secret-here
 # 빌드 (처음 한 번만)
 npm run build
 
-# Bot 실행
+# Bot 실행 (기본: Claude)
 source .env.slack && codecrew slack
+
+# 다른 에이전트 사용
+source .env.slack && codecrew slack --agent gemini
+source .env.slack && codecrew slack --agent copilot
 
 # 또는 로그와 함께 실행
 source .env.slack && codecrew slack --log
+source .env.slack && codecrew slack --agent gemini --log
 ```
 
 성공하면 다음과 같이 표시됩니다:
@@ -184,7 +189,7 @@ source .env.slack && codecrew slack --log
 ```
 ⚡️ CodeCrew Slack Bot is running!
 📱 Socket Mode: Enabled
-🤖 Coordinator Agent: slack-coordinator
+🤖 Using default agent for Slack: claude
 ```
 
 ---

@@ -26,6 +26,8 @@ export interface CliOptions {
   template?: string;
   templateVersion?: string;
   force?: boolean;
+  // Slack options
+  slackAgent?: string; // Default agent for Slack bot
   // API keys removed for security - use environment variables or CLI tool authentication instead
 }
 
@@ -90,7 +92,14 @@ export function parseCliOptions(): CliOptions {
       yargs.command('update', 'Clear cache and re-download templates');
     })
     .command('mcp', 'Start MCP server for IDE integration', () => {})
-    .command('slack', 'Start Slack Bot server', () => {})
+    .command('slack', 'Start Slack Bot server', (yargs) => {
+      yargs.option('agent', {
+        alias: 'a',
+        type: 'string',
+        default: 'claude',
+        description: 'Default agent to use for Slack conversations (claude, copilot, gemini, or custom agent ID)'
+      });
+    })
     .command('help', 'Show help', () => {})
     .option('install', {
       type: 'boolean',
@@ -182,6 +191,8 @@ export function parseCliOptions(): CliOptions {
     // Init options
     template: parsed.template as string,
     templateVersion: parsed['template-version'] as string,
-    force: parsed.force as boolean
+    force: parsed.force as boolean,
+    // Slack options
+    slackAgent: parsed.agent as string
   };
 }
