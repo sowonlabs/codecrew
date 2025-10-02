@@ -146,11 +146,15 @@ Started: ${timestamp}
       }
       
       // Providers handle prompts differently
-      if (this.getPromptInArgs()) {
-        // Include prompt in args like Copilot
+      const promptInArgs = this.getPromptInArgs();
+      if (promptInArgs) {
+        // Include prompt as separate arg (spawn will handle escaping)
         args.push(prompt);
       }
-      const command = `${this.getCliCommand()} ${args.join(' ')}`;
+      
+      const command = promptInArgs 
+        ? `${this.getCliCommand()} ${args.slice(0, -1).join(' ')} -p "<prompt>"`
+        : `${this.getCliCommand()} ${args.join(' ')}`;
       
       // Create task log file
       this.createTaskLogFile(taskId, this.name, command);
@@ -163,7 +167,6 @@ Started: ${timestamp}
       this.logger.log(`Executing ${this.name} with prompt (length: ${prompt.length})`);
 
       return new Promise((resolve) => {
-        // Use command name directly with shell: true for cross-platform execution
         // Set UTF-8 encoding for Windows PowerShell to handle Korean/Unicode correctly
         const env = { ...process.env };
         if (process.platform === 'win32') {
@@ -171,11 +174,21 @@ Started: ${timestamp}
           env.LANG = 'en_US.UTF-8';
         }
         
-        const child = spawn(executablePath, args, {
+        // For Windows, use the full path to .cmd file if needed
+        let executable = executablePath;
+        let spawnArgs = args;
+        let useShell = false;
+        
+        if (process.platform === 'win32' && !executablePath.match(/\.(cmd|bat|ps1)$/i)) {
+          // On Windows, if executable doesn't have extension, spawn needs shell
+          useShell = true;
+        }
+        
+        const child = spawn(executable, spawnArgs, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.workingDirectory || process.cwd(),
           env,
-          shell: true, // Let shell handle .cmd/.bat files on Windows
+          shell: useShell,
         } as any);
 
         let stdout = '';
