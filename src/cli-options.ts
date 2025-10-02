@@ -170,6 +170,10 @@ export function parseCliOptions(): CliOptions {
     // Keep execute as array for parallel processing support
     execute: Array.isArray(parsed.task) ? parsed.task : (parsed.task ? [parsed.task as string] : undefined),
     doctor: parsed._[0] === 'doctor',
-    config: parsed.config
+    config: parsed.config,
+    // Init options
+    template: parsed.template as string,
+    templateVersion: parsed['template-version'] as string,
+    force: parsed.force as boolean
   };
 }

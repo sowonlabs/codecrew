@@ -6,6 +6,7 @@ import { TaskManagementService } from '../services/task-management.service';
 import { ResultFormatterService } from '../services/result-formatter.service';
 import { ParallelProcessingService } from '../services/parallel-processing.service';
 import { AIProviderService } from '../ai-provider.service';
+import { checkMCPRegistration } from '../utils/mcp-installer';
 
 export interface DoctorOptions {
   config?: string;
@@ -60,13 +61,17 @@ export class DoctorHandler {
       const aiProviderDiagnostics = await this.checkAIProviders();
       diagnostics.push(...aiProviderDiagnostics);
 
-      // 4. Test AI providers if config is valid
+      // 4. Check MCP registration status
+      const mcpDiagnostics = await this.checkMCPStatus();
+      diagnostics.push(...mcpDiagnostics);
+
+      // 5. Test AI providers if config is valid
       if (configDiagnostic.status === 'success') {
         const testDiagnostics = await this.testAIProviders(fullConfigPath, taskId);
         diagnostics.push(...testDiagnostics);
       }
 
-      // 5. Overall health assessment
+      // 6. Overall health assessment
       const overallHealth = this.assessOverallHealth(diagnostics);
       
       const successMessage = this.formatDiagnosticReport(diagnostics, overallHealth);
@@ -203,6 +208,48 @@ export class DoctorHandler {
     }
 
     return diagnostics;
+  }
+
+  private async checkMCPStatus(): Promise<DiagnosticResult[]> {
+    try {
+      const mcpStatus = await checkMCPRegistration();
+      
+      const diagnostics: DiagnosticResult[] = [
+        {
+          name: 'Claude MCP',
+          status: mcpStatus.claude ? 'success' : 'warning',
+          message: mcpStatus.claude ? 'Registered' : 'Not registered',
+          details: mcpStatus.claude ? 
+            'CodeCrew MCP server is registered with Claude CLI' : 
+            'Run: claude mcp add -s user codecrew codecrew mcp'
+        },
+        {
+          name: 'Gemini MCP',
+          status: mcpStatus.gemini ? 'success' : 'warning',
+          message: mcpStatus.gemini ? 'Registered' : 'Not registered',
+          details: mcpStatus.gemini ? 
+            'CodeCrew MCP server is registered with Gemini CLI' : 
+            'Run: gemini mcp add -s user --trust codecrew codecrew mcp'
+        },
+        {
+          name: 'Copilot MCP',
+          status: mcpStatus.copilot ? 'success' : 'warning',
+          message: mcpStatus.copilot ? 'Configured' : 'Not configured',
+          details: mcpStatus.copilot ? 
+            'CodeCrew MCP server config exists in ~/.config/github-copilot/mcp-servers.json' : 
+            'Note: Copilot MCP works in VS Code extension only, not in CLI mode'
+        }
+      ];
+
+      return diagnostics;
+    } catch (error) {
+      return [{
+        name: 'MCP Status Check',
+        status: 'error',
+        message: 'Failed to check MCP registration status',
+        details: `Error: ${error instanceof Error ? error.message : String(error)}`
+      }];
+    }
   }
 
   private async testAIProviders(configPath: string, taskId: string): Promise<DiagnosticResult[]> {
@@ -373,57 +420,19 @@ export async function handleDoctor(app: any, args: CliOptions) {
   if (args.log) logger.log('Doctor command received');
 
   try {
-    console.log('🩺 Starting comprehensive system diagnosis...');
+    console.log('🩺 Starting comprehensive system diagnosis...\n');
     
-    // Simple fallback implementation to avoid hanging
-    const codeCrewTool = app.get(CodeCrewTool);
+    const doctorHandler = app.get(DoctorHandler);
     
-    const result = await codeCrewTool.checkAIProviders();
+    const result = await doctorHandler.handle({
+      config: args.config,
+      verbose: args.log
+    });
     
-    if (result.success) {
-      const availableCount = result.availableProviders?.length || 0;
-      const installation = result.installation;
-      
-      // Show installation status
-      console.log('\n**Installation Status:**');
-      console.log(`• Claude CLI: ${installation?.claude ? '✅ Installed' : '❌ Not Installed'}`);
-      console.log(`• Gemini CLI: ${installation?.gemini ? '✅ Installed' : '❌ Not Installed'}`);
-      console.log(`• Copilot CLI: ${installation?.copilot ? '✅ Installed' : '❌ Not Installed'}`);
-      
-      // Show available providers
-      if (availableCount > 0) {
-        console.log(`\n✅ Found ${availableCount} available AI provider(s):`);
-        result.availableProviders?.forEach((provider: string) => {
-          console.log(`   • ${provider}`);
-        });
-      } else {
-        console.log('\n❌ No AI providers are currently available');
-      }
-      
-      // Overall status based on actual availability
-      if (availableCount > 0) {
-        console.log('\n✅ **CodeCrew System Status: Healthy**');
-        console.log('\nNext Steps:');
-        console.log('• Your CodeCrew setup is ready to use!');
-        console.log('• Try: `codecrew query "@claude hello world"`');
-      } else {
-        console.log('\n⚠️  **CodeCrew System Status: No AI Providers Available**');
-        if (result.recommendations && result.recommendations.length > 0) {
-          console.log('\nRecommendations:');
-          result.recommendations.forEach((rec: string) => {
-            console.log(`• ${rec}`);
-          });
-        } else {
-          console.log('\nPlease install at least one AI CLI tool:');
-          console.log('• Claude CLI: https://claude.ai/download');
-          console.log('• Gemini CLI: Follow Google AI documentation');
-          console.log('• GitHub Copilot CLI: Follow GitHub documentation');
-        }
-        process.exit(1);
-      }
-    } else {
-      console.log('❌ AI provider check failed');
-      console.log(`   Error: ${result.error}`);
+    // Print the formatted diagnostic report
+    console.log(result.message);
+    
+    if (!result.success) {
       process.exit(1);
     }
     

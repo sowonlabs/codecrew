@@ -4,6 +4,7 @@ import { join } from 'path';
 import { TaskManagementService } from '../services/task-management.service';
 import { ResultFormatterService } from '../services/result-formatter.service';
 import { TemplateService } from '../services/template.service';
+import { registerCodeCrewMCP } from '../utils/mcp-installer';
 
 export interface InitOptions {
   config?: string;
@@ -11,6 +12,7 @@ export interface InitOptions {
   force?: boolean;
   template?: string; // 'default', 'minimal', 'development', 'production'
   templateVersion?: string;  // Template version (default: 'main')
+  skipMcp?: boolean; // Skip MCP registration
 }
 
 @Injectable()
@@ -98,6 +100,67 @@ export class InitHandler {
         level: 'info', 
         message: `Created configuration file: ${fullConfigPath}` 
       });
+
+      // Register MCP servers unless --skip-mcp is specified
+      if (!options.skipMcp) {
+        this.taskManagementService.addTaskLog(taskId, { 
+          level: 'info', 
+          message: 'Registering CodeCrew as MCP server for AI CLIs...' 
+        });
+
+        try {
+          const mcpResult = await registerCodeCrewMCP();
+          
+          // Log Claude registration
+          if (mcpResult.claude.success) {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'info', 
+              message: `✅ Claude MCP: ${mcpResult.claude.message}` 
+            });
+          } else {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'warn', 
+              message: `⚠️  Claude MCP: ${mcpResult.claude.message}` 
+            });
+          }
+
+          // Log Gemini registration
+          if (mcpResult.gemini.success) {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'info', 
+              message: `✅ Gemini MCP: ${mcpResult.gemini.message}` 
+            });
+          } else {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'warn', 
+              message: `⚠️  Gemini MCP: ${mcpResult.gemini.message}` 
+            });
+          }
+
+          // Log Copilot registration
+          if (mcpResult.copilot.success) {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'info', 
+              message: `✅ Copilot MCP: ${mcpResult.copilot.message}` 
+            });
+          } else {
+            this.taskManagementService.addTaskLog(taskId, { 
+              level: 'warn', 
+              message: `⚠️  Copilot MCP: ${mcpResult.copilot.message}` 
+            });
+          }
+        } catch (mcpError: any) {
+          this.taskManagementService.addTaskLog(taskId, { 
+            level: 'warn', 
+            message: `⚠️  MCP registration failed: ${mcpError.message}` 
+          });
+        }
+      } else {
+        this.taskManagementService.addTaskLog(taskId, { 
+          level: 'info', 
+          message: 'Skipping MCP registration (--skip-mcp flag)' 
+        });
+      }
 
       const successMessage = this.formatSuccessMessage(configPath, workingDir, templateName);
       
