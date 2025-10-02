@@ -214,10 +214,12 @@ CodeCrew includes a full-featured CLI that works independently of any IDE or MCP
 - ✅ Creates `agents.yaml` configuration file
 - ✅ Sets up `.codecrew/logs` directory structure
 - ✅ Configures default Claude, Gemini, and Copilot agents
+- ✅ **Automatically registers CodeCrew MCP server** with Claude CLI, Gemini CLI, and Copilot CLI
 - ✅ Prevents accidental overwrites (use `--force` to override)
 
 ```bash
-codecrew init                          # Initialize in current directory
+codecrew init                          # Initialize with auto MCP registration
+codecrew init --skip-mcp              # Skip MCP server registration
 codecrew init --config custom.yaml    # Use custom config filename
 codecrew init --force                 # Overwrite existing configuration
 ```
@@ -240,6 +242,7 @@ codecrew doctor --config path/to/config.yaml  # Use custom config
 - ✅ Supports pipeline input for context chaining
 - ✅ No file modifications - safe for analysis
 - ✅ **Model selection** - Specify AI models with `@agent:model` syntax
+- ✅ **Conversation history** - Use `--thread` to maintain context across queries
 
 ```bash
 codecrew query "@claude analyze this function"
@@ -247,6 +250,7 @@ codecrew query "@claude:opus detailed code review"
 codecrew query "@gemini:gemini-2.5-pro optimize algorithm"
 codecrew query "@copilot:gpt-5 suggest best practices"
 codecrew query "@claude @gemini @copilot review security practices"
+codecrew query "@claude explain authentication" --thread "auth-session"
 echo "user auth code" | codecrew query "@claude explain this"
 ```
 
@@ -261,12 +265,14 @@ echo "user auth code" | codecrew query "@claude explain this"
 - ✅ Pipeline support for multi-step workflows
 - ✅ Comprehensive logging and error handling
 - ✅ **Model selection** - Choose specific AI models for tasks
+- ✅ **Conversation history** - Use `--thread` to maintain context
 
 ```bash
 codecrew execute "@claude create a React component"
 codecrew execute "@claude:opus implement complex authentication system"
 codecrew execute "@gemini:gemini-2.5-pro optimize performance-critical code"
 codecrew execute "@claude @gemini implement different sorting algorithms"
+codecrew execute "@claude implement login" --thread "auth-feature"
 codecrew query "@architect design API" | codecrew execute "@backend implement the design"
 ```
 
@@ -292,6 +298,68 @@ codecrew execute "@gemini implement the suggested improvements"
 - **Error Recovery**: Detailed error messages with resolution suggestions
 - **Session Management**: Handles AI provider session limits gracefully
 - **Configuration Validation**: Validates agent configurations before execution
+- **Conversation History**: Thread-based context preservation with `--thread` option
+
+#### **💬 Slack Bot Integration**
+
+Run CodeCrew as a Slack bot for team collaboration:
+
+```bash
+codecrew slack                        # Start Slack bot with Socket Mode
+```
+
+**Features:**
+- ✅ **Natural conversation** with Claude AI
+- ✅ **Thread history** - Maintains context within Slack threads
+- ✅ **@mentions** - Responds to direct mentions and DMs
+- ✅ **Clean responses** - Minimal technical metadata, focus on content
+- ✅ **Reaction indicators** - Visual feedback (👀 processing, ✅ completed, ❌ error)
+
+**Setup:**
+1. Create Slack App and configure bot tokens
+2. Set environment variables in `.env.slack`:
+   ```bash
+   SLACK_BOT_TOKEN=xoxb-...
+   SLACK_APP_TOKEN=xapp-...
+   SLACK_SIGNING_SECRET=...
+   ```
+3. Start the bot: `npm run start:slack`
+
+**📖 Full installation guide:** [SLACK_INSTALL.md](./SLACK_INSTALL.md) (Korean)
+
+#### **🔄 Conversation History with `--thread`**
+
+Maintain conversation context across multiple queries and executions:
+
+```bash
+# Start a conversation thread
+codecrew query "@claude design a login system" --thread "auth-feature"
+
+# Continue in the same thread - Claude remembers previous context
+codecrew query "@claude add 2FA support" --thread "auth-feature"
+
+# Execute with context from the thread
+codecrew execute "@claude implement the design" --thread "auth-feature"
+```
+
+**Features:**
+- ✅ **Persistent context** - Stored in `.codecrew/conversations/`
+- ✅ **Cross-session** - Available even after restarting
+- ✅ **Thread isolation** - Different threads maintain separate contexts
+- ✅ **Automatic formatting** - Clean presentation to AI agents
+- ✅ **Works with all commands** - `query`, `execute`, and `chat`
+
+**Example workflow:**
+```bash
+# Design phase
+codecrew query "@architect design REST API" --thread "api-project"
+
+# Implementation phase (remembers design)
+codecrew execute "@backend implement endpoints" --thread "api-project"
+
+# Testing phase (remembers both design and implementation)
+codecrew query "@tester review implementation" --thread "api-project"
+```
 
 #### **🧪 Proven Test Results**
 
@@ -299,6 +367,8 @@ codecrew execute "@gemini implement the suggested improvements"
 - ✅ **Pipeline Context**: Verified context passing through `context-test.txt`
 - ✅ **Parallel Processing**: Multiple agents working simultaneously
 - ✅ **AI Integration**: All three providers (Claude, Gemini, Copilot) tested and working
+- ✅ **Slack Integration**: Thread history and natural conversation tested with 15+ messages
+- ✅ **Conversation History**: Context preservation across multiple sessions
 
 ### **Getting Started with CLI**
 
