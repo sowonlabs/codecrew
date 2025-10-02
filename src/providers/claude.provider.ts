@@ -16,16 +16,28 @@ export class ClaudeProvider extends BaseAIProvider {
   }
 
   protected getDefaultArgs(): string[] {
-    return ['--verbose'];
+    return ['--output-format', 'stream-json', '--verbose', '-p'];
   }
 
   protected getExecuteArgs(): string[] {
     // Set basic execution mode only. All security options are controlled in agents.yaml
-    return ['--verbose'];
+    return ['--output-format', 'stream-json', '--verbose', '-p'];
   }
 
   protected getNotInstalledMessage(): string {
     return 'Claude CLI is not installed. Please install it from https://claude.ai/download.';
+  }
+
+  /**
+   * Override execute to use tool call support
+   */
+  async execute(prompt: string, options: AIQueryOptions = {}): Promise<AIResponse> {
+    if (this.toolCallService) {
+      this.logger.log('🔧 ClaudeProvider: Using queryWithTools in execute mode');
+      return this.queryWithTools(prompt, options);
+    }
+    this.logger.warn('⚠️ ClaudeProvider: ToolCallService not available, falling back to base execute');
+    return super.execute(prompt, options);
   }
 
   public parseProviderError(
@@ -156,6 +168,25 @@ Please continue with your response based on this tool result.`;
    * Parse Claude's JSON response to detect tool usage
    */
   private parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+    // First, try to extract from CodeCrew XML tags
+    const xmlMatch = content.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
+    if (xmlMatch && xmlMatch[1]) {
+      try {
+        const jsonContent = xmlMatch[1].trim();
+        const parsed = JSON.parse(jsonContent);
+        if (parsed.type === 'tool_use' && parsed.name && parsed.input) {
+          this.logger.log(`Tool use detected from XML: ${parsed.name} with input ${JSON.stringify(parsed.input)}`);
+          return {
+            isToolUse: true,
+            toolName: parsed.name,
+            toolInput: parsed.input,
+          };
+        }
+      } catch (e) {
+        // Failed to parse XML content
+      }
+    }
+    
     try {
       const parsed = JSON.parse(content);
 

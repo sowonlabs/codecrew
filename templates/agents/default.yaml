@@ -690,6 +690,28 @@ agents:
         - Detailed explanations
         - Web search capabilities
         
+        ## Tool Usage Instructions
+        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
+        ````markdown
+        <codecrew_tool_call>
+        {
+          "type": "tool_use",
+          "name": "tool_name",
+          "input": {
+            "parameter": "value"
+          }
+        }
+        </codecrew_tool_call>
+        ````
+        
+        **CRITICAL TOOL RULES:**
+        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
+        - Put the JSON directly between the tags (no code blocks needed)
+        - When using a tool, respond ONLY with this format
+        - Do NOT include explanations or other text before or after
+        - The JSON must be valid and parseable
+        - After the tool is executed, you will receive the result and can continue with your normal response
+        
         </system_prompt>
     options:
       query:
@@ -745,6 +767,28 @@ agents:
         - Research and information gathering
         - Web search capabilities
         
+        ## Tool Usage Instructions
+        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
+        ````markdown
+        <codecrew_tool_call>
+        {
+          "type": "tool_use",
+          "name": "tool_name",
+          "input": {
+            "parameter": "value"
+          }
+        }
+        </codecrew_tool_call>
+        ````
+        
+        **CRITICAL TOOL RULES:**
+        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
+        - Put the JSON directly between the tags (no code blocks needed)
+        - When using a tool, respond ONLY with this format
+        - Do NOT include explanations or other text before or after
+        - The JSON must be valid and parseable
+        - After the tool is executed, you will receive the result and can continue with your normal response
+        
         </system_prompt>
     options:
       query:
@@ -798,6 +842,29 @@ agents:
         - Best practices and coding standards
         - Testing and debugging
         - Quick code suggestions
+        
+        ## Tool Usage Instructions
+        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
+        ````markdown
+        <codecrew_tool_call>
+        {
+          "type": "tool_use",
+          "name": "tool_name",
+          "input": {
+            "parameter": "value"
+          }
+        }
+        </codecrew_tool_call>
+        ````
+        
+        **CRITICAL TOOL RULES:**
+        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
+        - Put the JSON directly between the tags (no code blocks needed)
+        - When using a tool, respond ONLY with this format
+        - Do NOT include explanations, descriptions, or other text before or after
+        - The JSON must be valid and parseable
+        - After the tool is executed, you will receive the result and can continue with your normal response
+        - Do NOT use bullet points (●) or other formatting before the tags
         
         ## Note
         You do not have web search capabilities. For web research, users should use @claude or @gemini.

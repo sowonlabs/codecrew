@@ -69,6 +69,74 @@ export class ToolCallService {
    * Register built-in tools like read_file
    */
   private registerBuiltinTools(): void {
+    // Hello tool - simple test tool
+    this.register(
+      {
+        name: 'hello',
+        description: 'A simple greeting tool that returns a hello message with the provided name',
+        input_schema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'The name to greet',
+            },
+          },
+          required: ['name'],
+        },
+        output_schema: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'The greeting message',
+            },
+          },
+          required: ['message'],
+        },
+      },
+      {
+        execute: async (context: ToolExecutionContext): Promise<ToolExecutionResult> => {
+          const startTime = Date.now();
+          try {
+            const { name } = context.input;
+            if (!name || typeof name !== 'string') {
+              return {
+                success: false,
+                error: 'Invalid input: name is required and must be a string',
+                metadata: {
+                  executionTime: Date.now() - startTime,
+                  toolName: 'hello',
+                  runId: context.runId,
+                },
+              };
+            }
+
+            const message = `Hello, ${name}! 👋 Welcome to CodeCrew tool system!`;
+            return {
+              success: true,
+              data: { message },
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'hello',
+                runId: context.runId,
+              },
+            };
+          } catch (error: any) {
+            return {
+              success: false,
+              error: `Failed to generate greeting: ${error.message}`,
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'hello',
+                runId: context.runId,
+              },
+            };
+          }
+        },
+      }
+    );
+
     // Read file tool
     this.register(
       {
