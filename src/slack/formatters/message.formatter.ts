@@ -16,42 +16,7 @@ export class SlackMessageFormatter {
   formatExecutionResult(result: ExecutionResult): (Block | KnownBlock)[] {
     const blocks: (Block | KnownBlock)[] = [];
 
-    // Header
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: result.success ? '✅ *Task Completed*' : '❌ *Task Failed*',
-      },
-    });
-
-    // Divider
-    blocks.push({ type: 'divider' });
-
-    // Metadata
-    blocks.push({
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Coordinator:*\n${result.agent}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Provider:*\n${result.provider}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Task ID:*\n${result.taskId}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Status:*\n${result.success ? '✅ Success' : '❌ Failed'}`,
-        },
-      ],
-    });
-
-    // Response/Error
+    // Response/Error (Main content first!)
     if (result.success) {
       // Truncate long responses for Slack
       const response = this.truncateForSlack(result.response, 2500);
@@ -60,7 +25,7 @@ export class SlackMessageFormatter {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Response:*\n${response}`,
+          text: response,
         },
       });
     } else {
@@ -68,28 +33,18 @@ export class SlackMessageFormatter {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Error:*\n\`\`\`${result.error || 'Unknown error'}\`\`\``,
+          text: `❌ *Error*\n\`\`\`${result.error || 'Unknown error'}\`\`\``,
         },
       });
     }
 
-    // Divider
-    blocks.push({ type: 'divider' });
-
-    // Action buttons
+    // Context (compact metadata at the bottom)
     blocks.push({
-      type: 'actions',
+      type: 'context',
       elements: [
         {
-          type: 'button',
-          text: { type: 'plain_text', text: '📄 View Details' },
-          action_id: 'view_details',
-          value: result.taskId,
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: '🔄 Run Again' },
-          action_id: 'rerun',
+          type: 'mrkdwn',
+          text: `${result.success ? '✅' : '❌'} *${result.agent}* (${result.provider}) · \`${result.taskId}\``,
         },
       ],
     });
