@@ -110,7 +110,9 @@ export class AIProviderService implements OnModuleInit {
   }
 
   getAvailableProviders(): string[] {
-    return [...this.availableProviders];
+    // Return all registered provider names (not just initialized ones)
+    // This allows validation before actual initialization
+    return Array.from(this.providers.keys());
   }
 
   async checkAvailableProviders(): Promise<string[]> {

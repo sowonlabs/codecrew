@@ -4,6 +4,7 @@ import { CodeCrewTool } from '../codecrew.tool';
 import { SlackMessageFormatter } from './formatters/message.formatter';
 import { SlackConversationHistoryProvider } from '../conversation/slack-conversation-history.provider';
 import { ConfigService } from '../services/config.service';
+import { AIProviderService } from '../ai-provider.service';
 
 export class SlackBot {
   private readonly logger = new Logger(SlackBot.name);
@@ -15,12 +16,16 @@ export class SlackBot {
   constructor(
     private readonly codeCrewTool: CodeCrewTool,
     private readonly configService: ConfigService,
+    private readonly aiProviderService: AIProviderService,
     defaultAgent: string = 'claude'
   ) {
-    // Validate agent exists
-    const availableAgents = this.configService.getAllAgentIds();
-    if (!availableAgents.includes(defaultAgent)) {
-      const errorMsg = `❌ Agent '${defaultAgent}' not found in agents.yaml. Available agents: ${availableAgents.join(', ')}`;
+    // Validate agent exists (check both built-in providers and custom agents)
+    const builtinProviders = this.aiProviderService.getAvailableProviders();
+    const customAgents = this.configService.getAllAgentIds();
+    const allAvailableAgents = [...builtinProviders, ...customAgents];
+    
+    if (!allAvailableAgents.includes(defaultAgent)) {
+      const errorMsg = `❌ Agent '${defaultAgent}' not found. Available agents: ${allAvailableAgents.join(', ')}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -30,7 +35,8 @@ export class SlackBot {
     this.conversationHistory = new SlackConversationHistoryProvider();
 
     this.logger.log(`🤖 Slack bot initialized with default agent: ${this.defaultAgent}`);
-    this.logger.log(`📋 Available agents: ${availableAgents.join(', ')}`);
+    this.logger.log(`📋 Built-in providers: ${builtinProviders.join(', ')}`);
+    this.logger.log(`📋 Custom agents: ${customAgents.join(', ')}`);
 
     this.app = new App({
       token: process.env.SLACK_BOT_TOKEN,
