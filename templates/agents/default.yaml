@@ -85,6 +85,73 @@ documents:
     - If unsure, acknowledge limitations and suggest alternatives
     - When redirecting to @codecrew, provide clear instructions
 
+  # Common tool usage instructions for all agents
+  tool-usage-instructions: |
+    ## Tool Usage Instructions
+    {{#if tools}}
+    
+    You have access to {{tools.count}} tool(s) that you can call to perform specific actions.
+    
+    ### Available Tools
+    {{#each tools.list}}
+    
+    **{{name}}**
+    - Description: {{description}}
+    - Input schema:
+      ```json
+      {{{json input_schema}}}
+      ```
+    {{/each}}
+    
+    ### How to Call a Tool
+    
+    When you need to use a tool, wrap the JSON with special CodeCrew XML tags.
+    
+    **Example: Calling a tool**
+    
+    <codecrew_tool_call>
+    {
+      "type": "tool_use",
+      "name": "tool_name",
+      "input": {
+        "parameter": "value"
+      }
+    }
+    </codecrew_tool_call>
+    
+    After sending the tool call, you'll receive the execution result, and can then respond normally.
+    
+    **Wrong usage example ❌**
+    
+    DON'T do this:
+    ```
+    I'll use the tool now:
+    <codecrew_tool_call>
+    {"name": "tool_name", "input": {"param": "value"}}
+    </codecrew_tool_call>
+    Let me know if you need anything!
+    ```
+    
+    **Problems:**
+    - Extra text before/after the tool call
+    - Missing `"type": "tool_use"` field
+    
+    ### Format Rules
+    
+    **CRITICAL RULES:**
+    - ALWAYS wrap with `<codecrew_tool_call>` tags
+    - NO code blocks (```) around the tags
+    - When calling a tool, respond ONLY with the XML-wrapped JSON
+    - NO explanations or other text before or after
+    - Must include `"type": "tool_use"` field
+    - Must be valid JSON inside the tags
+    - Match the tool's input schema exactly
+    - After tool execution, you'll get the result and can respond normally
+    {{else}}
+    
+    No tools are currently available.
+    {{/if}}
+
   codecrew-manual: |
     # CodeCrew User Manual
     
@@ -690,27 +757,7 @@ agents:
         - Detailed explanations
         - Web search capabilities
         
-        ## Tool Usage Instructions
-        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
-        ````markdown
-        <codecrew_tool_call>
-        {
-          "type": "tool_use",
-          "name": "tool_name",
-          "input": {
-            "parameter": "value"
-          }
-        }
-        </codecrew_tool_call>
-        ````
-        
-        **CRITICAL TOOL RULES:**
-        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
-        - Put the JSON directly between the tags (no code blocks needed)
-        - When using a tool, respond ONLY with this format
-        - Do NOT include explanations or other text before or after
-        - The JSON must be valid and parseable
-        - After the tool is executed, you will receive the result and can continue with your normal response
+        {{{documents.tool-usage-instructions.content}}}
         
         </system_prompt>
     options:
@@ -767,27 +814,7 @@ agents:
         - Research and information gathering
         - Web search capabilities
         
-        ## Tool Usage Instructions
-        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
-        ````markdown
-        <codecrew_tool_call>
-        {
-          "type": "tool_use",
-          "name": "tool_name",
-          "input": {
-            "parameter": "value"
-          }
-        }
-        </codecrew_tool_call>
-        ````
-        
-        **CRITICAL TOOL RULES:**
-        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
-        - Put the JSON directly between the tags (no code blocks needed)
-        - When using a tool, respond ONLY with this format
-        - Do NOT include explanations or other text before or after
-        - The JSON must be valid and parseable
-        - After the tool is executed, you will receive the result and can continue with your normal response
+        {{{documents.tool-usage-instructions.content}}}
         
         </system_prompt>
     options:
@@ -843,27 +870,9 @@ agents:
         - Testing and debugging
         - Quick code suggestions
         
-        ## Tool Usage Instructions
-        When you need to use a tool, wrap the JSON with special CodeCrew XML tags:
-        ````markdown
-        <codecrew_tool_call>
-        {
-          "type": "tool_use",
-          "name": "tool_name",
-          "input": {
-            "parameter": "value"
-          }
-        }
-        </codecrew_tool_call>
-        ````
+        {{{documents.tool-usage-instructions.content}}}
         
-        **CRITICAL TOOL RULES:**
-        - ALWAYS wrap tool calls with <codecrew_tool_call> and </codecrew_tool_call> tags
-        - Put the JSON directly between the tags (no code blocks needed)
-        - When using a tool, respond ONLY with this format
-        - Do NOT include explanations, descriptions, or other text before or after
-        - The JSON must be valid and parseable
-        - After the tool is executed, you will receive the result and can continue with your normal response
+        **IMPORTANT COPILOT-SPECIFIC RULES:**
         - Do NOT use bullet points (●) or other formatting before the tags
         
         ## Note

@@ -7,8 +7,11 @@ import { ToolCallService, Tool } from '../services/tool-call.service';
 export class ClaudeProvider extends BaseAIProvider {
   readonly name = 'claude' as const;
 
-  constructor(private readonly toolCallService?: ToolCallService) {
+  constructor(toolCallService?: ToolCallService) {
     super('ClaudeProvider');
+    if (toolCallService) {
+      this.setToolCallService(toolCallService);
+    }
   }
 
   protected getCliCommand(): string {

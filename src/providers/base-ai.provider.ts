@@ -3,11 +3,13 @@ import { spawn, execSync } from 'child_process';
 import { writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { AIProvider, AIQueryOptions, AIResponse } from './ai-provider.interface';
+import { ToolCallService, Tool } from '../services/tool-call.service';
 
 @Injectable()
 export abstract class BaseAIProvider implements AIProvider {
   abstract readonly name: 'claude' | 'gemini' | 'copilot';
   protected readonly logger: Logger;
+  protected toolCallService?: ToolCallService;
   private readonly logsDir = join(process.cwd(), '.codecrew', 'logs');
   private cachedPath: string | null = null;
 
@@ -48,6 +50,13 @@ export abstract class BaseAIProvider implements AIProvider {
    */
   protected getPromptInArgs(): boolean {
     return false; // Default is to use stdin
+  }
+
+  /**
+   * Set ToolCallService for tool execution support
+   */
+  protected setToolCallService(toolCallService: ToolCallService): void {
+    this.toolCallService = toolCallService;
   }
 
   /**

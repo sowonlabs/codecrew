@@ -7,8 +7,11 @@ import { ToolCallService, Tool } from '../services/tool-call.service';
 export class GeminiProvider extends BaseAIProvider {
   readonly name = 'gemini' as const;
 
-  constructor(private readonly toolCallService?: ToolCallService) {
+  constructor(toolCallService?: ToolCallService) {
     super('GeminiProvider');
+    if (toolCallService) {
+      this.setToolCallService(toolCallService);
+    }
   }
 
   protected getCliCommand(): string {
