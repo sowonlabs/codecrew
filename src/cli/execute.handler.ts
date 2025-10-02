@@ -70,15 +70,28 @@ export async function handleExecute(app: any, args: CliOptions) {
     }
 
     const parsedTasks: ParsedTask[] = [];
-    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/;
+    const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g; // Add global flag
 
     for (const taskStr of executeInput) {
-      const match = taskStr.match(mentionRegex);
-      if (match && match[1]) {
-        const agentId: string = match[1];
-        const model: string | undefined = match[2]; // Capture model if provided
-        const task = taskStr.replace(mentionRegex, '').trim();
-        if (task) {
+      // Find all @mentions in this task string
+      const matches = [...taskStr.matchAll(mentionRegex)];
+      
+      if (matches.length === 0) {
+        continue; // Skip if no mentions found
+      }
+
+      // Remove all @mentions to get the actual task text
+      const task = taskStr.replace(/@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g, '').trim();
+      
+      if (!task) {
+        continue; // Skip if no task text after removing mentions
+      }
+
+      // Create a separate task for each agent mention
+      for (const match of matches) {
+        const agentId = match[1];
+        const model = match[2]; // Capture model if provided
+        if (agentId) {
           parsedTasks.push({ agentId, task, model });
         }
       }
@@ -89,6 +102,27 @@ export async function handleExecute(app: any, args: CliOptions) {
       console.log('Please specify agents using @agent_name format');
       console.log('Example: codecrew execute "@backend implement API"');
       console.log('Example (parallel): codecrew execute "@claude task1" "@claude task2"');
+      process.exit(1);
+    }
+
+    // Validate all agents exist before execution
+    try {
+      const agentsResult = await codeCrewTool.listAgents();
+      const validAgentIds = new Set(agentsResult.availableAgents?.map((a: any) => a.id) || []);
+      
+      const invalidAgents = parsedTasks
+        .filter(pt => !validAgentIds.has(pt.agentId))
+        .map(pt => pt.agentId);
+
+      if (invalidAgents.length > 0) {
+        const uniqueInvalid = [...new Set(invalidAgents)];
+        const errorMsg = `Error: Agent(s) not found: ${uniqueInvalid.map(a => `@${a}`).join(', ')}`;
+        console.error(errorMsg);
+        process.exit(1);
+      }
+    } catch (error) {
+      const errorMsg = `Error: Failed to load agents - ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error(errorMsg);
       process.exit(1);
     }
 

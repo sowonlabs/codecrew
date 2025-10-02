@@ -125,6 +125,27 @@ export async function handleQuery(app: any, args: CliOptions) {
       process.exit(1);
     }
 
+    // Validate all agents exist before execution
+    try {
+      const agentsResult = await codeCrewTool.listAgents();
+      const validAgentIds = new Set(agentsResult.availableAgents?.map((a: any) => a.id) || []);
+      
+      const invalidAgents = parsedQueries
+        .filter(pq => !validAgentIds.has(pq.agentId))
+        .map(pq => pq.agentId);
+
+      if (invalidAgents.length > 0) {
+        const uniqueInvalid = [...new Set(invalidAgents)];
+        const errorMsg = `Error: Agent(s) not found: ${uniqueInvalid.map(a => `@${a}`).join(', ')}`;
+        console.error(errorMsg);
+        process.exit(1);
+      }
+    } catch (error) {
+      const errorMsg = `Error: Failed to load agents - ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error(errorMsg);
+      process.exit(1);
+    }
+
     if (!args.raw) {
       console.log(`🔍 Processing ${parsedQueries.length} ${parsedQueries.length === 1 ? 'query' : 'queries'}`);
     }
@@ -139,11 +160,6 @@ export async function handleQuery(app: any, args: CliOptions) {
         process.exit(1);
       }
       const { agentId, query, model } = firstQuery;
-
-      // Add user message to conversation history if thread is specified
-      if (conversationProvider && threadId) {
-        await conversationProvider.addMessage(threadId, os.userInfo().username, query, false);
-      }
 
       if (!args.raw) {
         console.log(`📋 Task: ${query}`);
@@ -169,33 +185,30 @@ export async function handleQuery(app: any, args: CliOptions) {
         model: model
       });
 
-      // Add assistant response to conversation history if thread is specified
+      // Check if query was successful before saving to history
+      if (!result.success) {
+        // Output error message even in raw mode
+        const errorMsg = `Error: ${result.error || 'Query failed'}`;
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
+      // Only save to conversation history after successful response
       if (conversationProvider && threadId && result.response) {
+        await conversationProvider.addMessage(threadId, os.userInfo().username, query, false);
         await conversationProvider.addMessage(threadId, 'codecrew', result.response, true);
       }
 
       // 5. Format and output results for single agent
       if (args.raw) {
         // Raw mode: output only AI response
-        console.log(result.response || result.error || '');
+        console.log(result.response || '');
       } else {
         formatSingleAgentResult(result, agentId, query);
       }
 
     } else {
       // Multiple queries (parallel)
-      
-      // Add user messages to conversation history if thread is specified
-      if (conversationProvider && threadId) {
-        for (const pq of parsedQueries) {
-          await conversationProvider.addMessage(
-            threadId, 
-            os.userInfo().username, 
-            `@${pq.agentId}${pq.model ? `:${pq.model}` : ''} ${pq.query}`, 
-            false
-          );
-        }
-      }
       
       if (!args.raw) {
         console.log(`🚀 Querying ${parsedQueries.length} agents in parallel:`);
@@ -223,17 +236,49 @@ export async function handleQuery(app: any, args: CliOptions) {
 
       result = await codeCrewTool.queryAgentParallel({ queries });
 
-      // Add assistant responses to conversation history if thread is specified
-      if (conversationProvider && threadId && result.results && Array.isArray(result.results)) {
-        for (const agentResult of result.results) {
-          if (agentResult.success && agentResult.response) {
-            const agentName = `${agentResult.agentId}${agentResult.model ? `:${agentResult.model}` : ''}`;
-            await conversationProvider.addMessage(
-              threadId,
-              agentName,
-              agentResult.response,
-              true
-            );
+      // Check for any errors in parallel execution
+      if (!result.success) {
+        const errorMsg = `Error: Parallel query failed - ${result.error || 'Unknown error'}`;
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
+      // Check individual results for errors
+      const hasErrors = result.results && result.results.some((r: any) => !r.success);
+      if (hasErrors) {
+        const failedAgents = result.results
+          .filter((r: any) => !r.success)
+          .map((r: any) => `@${r.agentId}: ${r.error}`)
+          .join(', ');
+        const errorMsg = `Error: Some agents failed - ${failedAgents}`;
+        console.error(errorMsg);
+        process.exit(1);
+      }
+
+      // Only save to conversation history after all successful responses
+      if (conversationProvider && threadId) {
+        // Save user messages
+        for (const pq of parsedQueries) {
+          await conversationProvider.addMessage(
+            threadId, 
+            os.userInfo().username, 
+            `@${pq.agentId}${pq.model ? `:${pq.model}` : ''} ${pq.query}`, 
+            false
+          );
+        }
+        
+        // Save assistant responses (only successful ones)
+        if (result.results && Array.isArray(result.results)) {
+          for (const agentResult of result.results) {
+            if (agentResult.success && agentResult.response) {
+              const agentName = `${agentResult.agentId}${agentResult.model ? `:${agentResult.model}` : ''}`;
+              await conversationProvider.addMessage(
+                threadId,
+                agentName,
+                agentResult.response,
+                true
+              );
+            }
           }
         }
       }
@@ -243,7 +288,9 @@ export async function handleQuery(app: any, args: CliOptions) {
         // Raw mode: output only AI responses, one per line
         if (result.results && Array.isArray(result.results)) {
           result.results.forEach((agentResult: any) => {
-            console.log(agentResult.response || agentResult.error || '');
+            if (agentResult.success) {
+              console.log(agentResult.response || '');
+            }
           });
         }
       } else {
@@ -252,13 +299,7 @@ export async function handleQuery(app: any, args: CliOptions) {
       }
     }
 
-    if (!result.success) {
-      if (!args.raw) {
-        console.log('\n❌ Query execution failed');
-      }
-      process.exit(1);
-    }
-
+    // Success message (already handled errors above with exit(1))
     if (!args.raw) {
       console.log('\n✅ Query completed successfully');
     }
