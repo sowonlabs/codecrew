@@ -24,6 +24,17 @@ export interface TemplateContext {
     text: string;
     isAssistant: boolean;
   }>;
+  /** Available tools */
+  tools?: {
+    list: Array<{
+      name: string;
+      description: string;
+      input_schema: any;
+      output_schema?: any;
+    }>;
+    json: string;
+    count: number;
+  };
   /** Additional custom variables */
   vars?: Record<string, any>;
 }
@@ -38,11 +49,14 @@ export interface TemplateContext {
  * - {{#if env.VAR_NAME}}...{{/if}} - Environment variable conditions
  * - {{#if agent.model}}...{{/if}} - Agent metadata conditions
  * - {{#if (eq mode "query")}}...{{/if}} - Mode-based conditions
+ * - {{#if tools}}...{{/if}} - Check if tools are available
+ * - {{{tools.json}}} - All tools as JSON string
+ * - {{tools.count}} - Number of available tools
  * - {{vars.customKey}} - Custom variables
  * 
  * @param template - Template string with Handlebars variables
  * @param documentLoader - DocumentLoaderService instance
- * @param additionalContext - Optional additional context (env, options, agent, mode, vars)
+ * @param additionalContext - Optional additional context (env, options, agent, mode, tools, vars)
  * @returns Processed template with all context injected
  */
 export async function processDocumentTemplate(
@@ -64,6 +78,7 @@ export async function processDocumentTemplate(
     options: additionalContext?.options || [],
     agent: additionalContext?.agent || {},
     mode: additionalContext?.mode,
+    tools: additionalContext?.tools,
     vars: additionalContext?.vars || {},
   };
 

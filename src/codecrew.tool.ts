@@ -15,6 +15,7 @@ import { TaskManagementService } from './services/task-management.service';
 import { ResultFormatterService } from './services/result-formatter.service';
 import { TemplateService } from './services/template.service';
 import { DocumentLoaderService } from './services/document-loader.service';
+import { ToolCallService } from './services/tool-call.service';
 import type { TemplateContext } from './utils/template-processor';
 
 @Injectable()
@@ -29,6 +30,29 @@ export class CodeCrewTool {
     return crypto.randomBytes(8).toString('hex');
   }
   
+  /**
+   * Build tools context for template processing
+   * @returns Tools context object with list, json, and count
+   */
+  private buildToolsContext(): TemplateContext['tools'] {
+    const tools = this.toolCallService.list();
+    
+    if (!tools || tools.length === 0) {
+      return undefined;
+    }
+    
+    return {
+      list: tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.input_schema,
+        output_schema: t.output_schema,
+      })),
+      json: JSON.stringify(tools, null, 2),
+      count: tools.length,
+    };
+  }
+  
   constructor(
     private readonly aiService: AIService,
     private readonly aiProviderService: AIProviderService,
@@ -38,6 +62,7 @@ export class CodeCrewTool {
     private readonly resultFormatterService: ResultFormatterService,
     private readonly templateService: TemplateService,
     private readonly documentLoaderService: DocumentLoaderService,
+    private readonly toolCallService: ToolCallService,
   ) {}
 
 
@@ -871,6 +896,7 @@ Execution Mode: Implementation guidance could not be provided.`
               model: agent.inline?.model,
               workingDirectory: agent.working_directory || agent.workingDirectory || './',
             },
+            tools: this.buildToolsContext(),
             vars: {
               security_key: securityKey,
             },
@@ -1014,6 +1040,7 @@ Execution Mode: Implementation guidance could not be provided.`
               model: agent.inline?.model,
               workingDirectory: agent.working_directory || agent.workingDirectory,
             },
+            tools: this.buildToolsContext(),
             vars: {},
           };
           
