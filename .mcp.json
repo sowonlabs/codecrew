@@ -1,12 +1,13 @@
 {
   "mcpServers": {
     "codecrew": {
-      "command": "codecrew",
+      "command": "node",
       "args": [
+        "/Users/doha/git/codecrew/dist/main.js",
         "mcp"
       ],
       "env": {
-        "AGENTS_CONFIG": "${workspaceFolder}/agents.yaml"
+        "AGENTS_CONFIG": "/Users/doha/git/codecrew/agents.yaml"
       }
     }
   }

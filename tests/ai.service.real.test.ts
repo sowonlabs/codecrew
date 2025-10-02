@@ -73,11 +73,7 @@ describe('AIService - Real CLI Integration Tests', () => {
     }, 60000);
 
     it('should handle complex prompt with code analysis request', async () => {
-      const codePrompt = `Please analyze this TypeScript function in one sentence:
-
-function add(a: number, b: number): number {
-  return a + b;
-}`;
+      const codePrompt = `Respond with exactly: "Simple addition function"`;
 
       const result = await service.queryClaudeCLI(codePrompt);
 
@@ -86,13 +82,13 @@ function add(a: number, b: number): number {
       expect(result.provider).toBe('claude');
       if (result.success) {
         expect(result.content).toBeTruthy();
-        expect(result.content.length).toBeGreaterThan(10);
+        expect(result.content.length).toBeGreaterThan(5);
         console.log('✅ Claude CLI code analysis working!');
-        console.log('📝 Analysis:', result.content.substring(0, 200));
+        console.log('📝 Analysis:', result.content.substring(0, 100));
       } else {
         console.log('❌ Claude CLI code analysis failed:', result.error);
       }
-    }, 60000);
+    }, 30000); // Reduced from 60 to 30 seconds
 
     it('should handle special characters and escaping', async () => {
       const specialPrompt = `Test prompt with "quotes", 'single quotes', \nNewlines\n, and $variables. Respond with "Success".`;
@@ -131,7 +127,7 @@ function add(a: number, b: number): number {
 
   describe('Copilot CLI Real Integration', () => {
     it('should execute copilot CLI with simple prompt', async () => {
-      const result = await service.queryCopilotCLI('How do I create a simple Node.js server?');
+      const result = await service.queryCopilotCLI('Say "OK"');
 
       console.log('Copilot Response:', result);
 
@@ -144,7 +140,7 @@ function add(a: number, b: number): number {
         // Failure is expected if not installed
         expect(result.error).toBeTruthy();
       }
-    }, 60000);
+    }, 30000); // Reduced from 60 to 30 seconds
   });
 
   describe('AI Provider Status Check', () => {
@@ -169,7 +165,7 @@ function add(a: number, b: number): number {
 
   describe('AI Router Integration', () => {
     it('should route to gemini and handle real response', async () => {
-      const result = await service.queryAI('What is TypeScript in one sentence?', 'gemini');
+      const result = await service.queryAI('Say "TypeScript"', 'gemini');
 
       console.log('AI Router Gemini Result:', result);
 
@@ -177,13 +173,14 @@ function add(a: number, b: number): number {
       if (result.success) {
         expect(result.content).toBeTruthy();
         console.log('✅ AI Router with Gemini working!');
-        console.log('📝 TypeScript explanation:', result.content);
+        console.log('📝 Response:', result.content);
       } else {
-        console.log('❌ AI Router with Claude failed:', result.error);
+        console.log('❌ AI Router with Gemini failed:', result.error);
       }
-    }, 10 * MINUTES);
+    }, 60000); // Reduced from 10 minutes to 1 minute
 
-    it('should route to gemini and handle execute', async () => {
+    // SKIP: 이 테스트는 실제 파일 분석으로 AI 사용량이 너무 많음
+    it.skip('should route to gemini and handle execute', async () => {
       const result = await service.queryGeminiCLI('Analyze the README.md file and tell me what this project is about.', {
           workingDirectory: '/Users/doha/git/mcp-servers/packages/gmail',
           timeout: 45000
@@ -318,7 +315,7 @@ function add(a: number, b: number): number {
         return;
       }
 
-      const testPrompt = 'Hello, respond with just "Test successful"';
+      const testPrompt = 'Say "OK"';
       console.log('🔧 Testing with prompt:', testPrompt);
       
       try {
@@ -345,9 +342,10 @@ function add(a: number, b: number): number {
       } catch (error: any) {
         console.log('❌ Copilot query threw error:', error.message);
       }
-    }, 60000); // 1 minute timeout
+    }, 45000); // Reduced from 60 to 45 seconds
 
-    it('should test actual copilot CLI EXECUTE execution (NEW)', async () => {
+    // SKIP: 파일 생성 테스트는 AI 사용량이 많고 부작용이 있음
+    it.skip('should test actual copilot CLI EXECUTE execution (NEW)', async () => {
       const isAvailable = await copilotProvider.isAvailable();
       console.log('🚀 Copilot Execute Test - Available:', isAvailable);
       

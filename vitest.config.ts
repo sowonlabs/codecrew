@@ -6,5 +6,12 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     testTimeout: 30000,
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/worktree/**',  // Exclude git worktree directories
+      '**/.git/**',
+      '**/*.d.ts',
+    ],
   },
 });
