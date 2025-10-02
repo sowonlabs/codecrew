@@ -6,3 +6,8 @@ credentials.json
 .env*
 # Code CLI logs
 .codecrew/
+
+# IDE
+.idea/
+.vscode/
+*.iml

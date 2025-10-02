@@ -16,6 +16,19 @@ export class McpController {
   @HttpCode(202)
   async handlePost(@Req() req: Request, @Res() res: Response, @Body() body: any) {
     this.logger.debug(`request body: ${JSON.stringify(body)}`);
+    
+    // Handle prompts/list request - return empty list to prevent Gemini CLI errors
+    if (body && body.method === 'prompts/list') {
+      this.logger.debug('Handling prompts/list request - returning empty list');
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: {
+          prompts: []
+        }
+      });
+    }
+    
     const result = await this.mcpHandler.handleRequest(SERVER_NAME, req, res, body);
 
     // Empty response if it's a notification request or response is null

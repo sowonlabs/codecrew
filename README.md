@@ -23,6 +23,23 @@
 - **Gemini CLI** - Google's powerful AI with real-time web access
 - **GitHub Copilot CLI** - GitHub's specialized coding assistant
 
+### MCP Integration Status
+
+CodeCrew can be used as an MCP server by other AI tools. Here's the current integration status:
+
+| AI Tool | MCP Support | Status | Notes |
+|---------|-------------|--------|-------|
+| **Claude CLI** | ✅ Full Support | Working | Can use CodeCrew MCP tools via user-level registration (`claude mcp add`) |
+| **Gemini CLI** | ✅ Full Support | Working | Requires `prompts/list` handler (implemented). Use with `--allowed-mcp-server-names=codecrew` |
+| **Copilot CLI** | ❌ Limited | Not Working | MCP support in CLI mode is unstable. Works in VS Code but not via command line |
+
+**Key Findings:**
+- ✅ **Claude CLI**: Fully functional MCP integration with tool calling support
+- ✅ **Gemini CLI**: Working after adding `prompts/list` method handler
+- ❌ **Copilot CLI**: MCP tools not recognized in CLI mode (VS Code extension works)
+
+**For AI developers:** If you're using Claude CLI or Gemini CLI, you can leverage CodeCrew as an MCP server to access multi-agent capabilities from within those tools.
+
 ## Quick Start
 
 CodeCrew offers two distinct modes of operation:
@@ -138,6 +155,46 @@ Add to Cursor MCP configuration:
 - **Windsurf**: MCP support may vary - check their documentation
 
 **Note:** Create `agents.yaml` file first (see Custom Agents Setup below), then restart your MCP client.
+
+### Using CodeCrew as MCP Server from AI CLIs
+
+CodeCrew can also be used as an MCP server directly from AI command-line tools:
+
+#### Claude CLI (✅ Working)
+```bash
+# Register CodeCrew MCP server (user-level)
+claude mcp add -s user codecrew codecrew mcp
+
+# Verify registration
+claude mcp list
+
+# Use from Claude CLI
+claude "Use codecrew_listAgents to show all available agents"
+```
+
+#### Gemini CLI (✅ Working)
+```bash
+# Register CodeCrew MCP server (user-level)
+gemini mcp add -s user --trust codecrew codecrew mcp
+
+# Verify registration
+gemini mcp list
+
+# Use from Gemini CLI
+gemini -p "Use codecrew_listAgents tool" --allowed-mcp-server-names=codecrew --yolo
+```
+
+#### Copilot CLI (❌ Not Supported)
+GitHub Copilot CLI does not currently support MCP server integration in command-line mode. MCP tools work only through the VS Code extension.
+
+**Available CodeCrew MCP Tools:**
+- `codecrew_listAgents` - List all available specialist agents
+- `codecrew_checkAIProviders` - Check AI CLI availability status
+- `codecrew_queryAgent` - Query a specialist agent (read-only)
+- `codecrew_executeAgent` - Execute tasks through an agent
+- `codecrew_queryAgentParallel` - Query multiple agents in parallel
+- `codecrew_executeAgentParallel` - Execute multiple tasks in parallel
+- `codecrew_getTaskLogs` - Retrieve task execution logs
 
 ## 🖥️ CLI Features
 
