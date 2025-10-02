@@ -81,6 +81,23 @@ their own specialization, and get results in parallel.
       ['codecrew mcp'],
     );
 
+    this.showCommandHelp(
+      'chat',
+      'Start an interactive chat session with conversation history. Maintains context across messages.',
+      [
+        'codecrew chat',
+        'codecrew chat --thread my-session',
+        'codecrew chat --list',
+        'codecrew chat --delete my-session',
+      ],
+    );
+
+    this.showCommandHelp(
+      'slack',
+      'Starts the Slack bot integration for team collaboration.',
+      ['codecrew slack'],
+    );
+
     this.showCommandHelp('help', 'Shows this help message.', ['codecrew help']);
 
     console.log(chalk.bold.white('\nAGENT SPECIALIZATIONS:'));

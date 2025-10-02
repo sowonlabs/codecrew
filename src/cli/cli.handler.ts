@@ -40,11 +40,16 @@ export class CLIHandler {
           await handleTemplates(app, args);
           break;
 
+        case 'chat':
+          const { handleChat } = await import('./chat.handler');
+          await handleChat(app, args);
+          break;
+
         case 'help':
           const { handleHelp } = await import('./help.handler');
           await handleHelp(app);
           break;
-        
+
         default:
           logger.error(`Unknown command: ${args.command}`);
           console.log('Run \'codecrew help\' for a list of commands.');

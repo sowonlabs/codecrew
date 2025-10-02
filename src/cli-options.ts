@@ -8,6 +8,12 @@ export interface CliOptions {
   port: number;
   allowTool: string[]; // Support for --allow-tool=terminal,files,web
   raw: boolean; // Output only AI response (for piping)
+  // Context enhancement options
+  loadProjectContext: boolean; // Load CLAUDE.md files
+  projectContextMaxLength: number; // Max length for project context
+  enableIntelligentCompression: boolean; // Use intelligent compression
+  // Conversation thread options
+  thread?: string; // Thread ID for conversation continuity
   // CLI commands
   command?: string;
   query?: string | string[];
@@ -120,6 +126,26 @@ export function parseCliOptions(): CliOptions {
       default: false,
       description: 'Output only AI response without formatting (useful for piping)'
     })
+    .option('load-project-context', {
+      type: 'boolean',
+      default: true,
+      description: 'Load project context from CLAUDE.md files'
+    })
+    .option('project-context-max-length', {
+      type: 'number',
+      default: 2000,
+      description: 'Maximum length for project context'
+    })
+    .option('enable-intelligent-compression', {
+      type: 'boolean',
+      default: true,
+      description: 'Use intelligent conversation compression'
+    })
+    .option('thread', {
+      alias: 't',
+      type: 'string',
+      description: 'Thread ID for conversation continuity'
+    })
     // API key options removed for security
     // Use environment variables or CLI tool authentication instead
     .help(false)
@@ -132,6 +158,12 @@ export function parseCliOptions(): CliOptions {
     port: parsed.port,
     allowTool: parsed['allow-tool'] as string[] || [],
     raw: parsed.raw,
+    // Context enhancement options
+    loadProjectContext: parsed['load-project-context'] as boolean,
+    projectContextMaxLength: parsed['project-context-max-length'] as number,
+    enableIntelligentCompression: parsed['enable-intelligent-compression'] as boolean,
+    // Conversation thread options
+    thread: parsed.thread as string,
     command: parsed._[0] as string,
     // Keep query as array for parallel processing support
     query: Array.isArray(parsed.message) ? parsed.message : (parsed.message ? [parsed.message as string] : undefined),

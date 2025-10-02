@@ -2,14 +2,17 @@ import { App, LogLevel } from '@slack/bolt';
 import { Logger } from '@nestjs/common';
 import { CodeCrewTool } from '../codecrew.tool';
 import { SlackMessageFormatter } from './formatters/message.formatter';
+import { SlackConversationHistoryProvider } from '../conversation/slack-conversation-history.provider';
 
 export class SlackBot {
   private readonly logger = new Logger(SlackBot.name);
   private app: App;
   private formatter: SlackMessageFormatter;
+  private conversationHistory: SlackConversationHistoryProvider;
 
   constructor(private readonly codeCrewTool: CodeCrewTool) {
     this.formatter = new SlackMessageFormatter();
+    this.conversationHistory = new SlackConversationHistoryProvider();
 
     this.app = new App({
       token: process.env.SLACK_BOT_TOKEN,
@@ -72,7 +75,7 @@ export class SlackBot {
   private async handleCommand({ message, say, client }: any) {
     try {
       const messageText = (message as any).text || '';
-      
+
       // Remove only bot mention from text (Slack format: <@U123456>)
       // Keep "codecrew" in the actual message content - it might be part of the question
       let userRequest = messageText
@@ -98,18 +101,54 @@ export class SlackBot {
       });
 
       try {
+        // Initialize conversation history provider with Slack client
+        this.conversationHistory.initialize(client);
+
+        // Build context with thread history
+        let contextText = `Slack user: ${message.user}, Channel: ${message.channel}`;
+
+        // Get thread timestamp (parent message or current message)
+        const threadTs = message.thread_ts || message.ts;
+
+        // If this is a reply in a thread, fetch conversation history
+        if (message.thread_ts) {
+          const threadId = `${message.channel}:${threadTs}`;
+
+          try {
+            const thread = await this.conversationHistory.fetchHistory(threadId, {
+              limit: 20,
+              maxContextLength: 4000,
+              excludeCurrent: true,
+            });
+
+            if (thread.messages.length > 0) {
+              const historyContext = this.conversationHistory.formatForAI(thread, {
+                excludeCurrent: true,
+              });
+
+              if (historyContext) {
+                contextText += '\n\n' + historyContext;
+                this.logger.log(`📚 Including ${thread.messages.length} previous messages in context`);
+              }
+            }
+          } catch (error: any) {
+            this.logger.warn(`Failed to fetch thread history: ${error.message}`);
+            // Continue without history if fetch fails
+          }
+        }
+
         // Use MCP Test Agent which has MCP tools enabled
         const result = await this.codeCrewTool.queryAgent({
           agentId: 'mcp_test_agent',
           query: userRequest,
-          context: `Slack user: ${message.user}, Channel: ${message.channel}`,
+          context: contextText,
         });
 
         this.logger.log(`📦 Received result from CodeCrew MCP`);
 
         // Extract text from MCP response format
-        const responseText = result.content && result.content[0] 
-          ? result.content[0].text 
+        const responseText = result.content && result.content[0]
+          ? result.content[0].text
           : 'No response';
 
         const blocks = this.formatter.formatExecutionResult({

@@ -553,6 +553,14 @@ agents:
         
         You are the CodeCrew Assistant, designed to help users with CodeCrew CLI usage.
         
+        {{#if messages}}
+        <conversation_history key="{{vars.security_key}}">
+        {{#each messages}}
+        {{#if isAssistant}}Assistant{{else}}User{{/if}}: {{text}}
+        {{/each}}
+        </conversation_history>
+        
+        {{/if}}
         <manual>
         {{{documents.codecrew-manual.content}}}
         </manual>
@@ -666,6 +674,14 @@ agents:
         - Model: {{agent.model}}{{~/if}}
         - Working Directory: {{agent.workingDirectory}}
         
+        {{#if messages}}
+        <conversation_history key="{{vars.security_key}}">
+        {{#each messages}}
+        {{#if isAssistant}}Assistant{{else}}User{{/if}}: {{text}}
+        {{/each}}
+        </conversation_history>
+        
+        {{/if}}
         {{{documents.builtin-agent-guidelines.content}}}
         
         ## Your Strengths
@@ -713,6 +729,14 @@ agents:
         - Model: {{agent.model}}{{~/if}}
         - Working Directory: {{agent.workingDirectory}}
         
+        {{#if messages}}
+        <conversation_history key="{{vars.security_key}}">
+        {{#each messages}}
+        {{#if isAssistant}}Assistant{{else}}User{{/if}}: {{text}}
+        {{/each}}
+        </conversation_history>
+        
+        {{/if}}
         {{{documents.builtin-agent-guidelines.content}}}
         
         ## Your Strengths
@@ -759,6 +783,14 @@ agents:
         - Model: {{agent.model}}{{~/if}}
         - Working Directory: {{agent.workingDirectory}}
         
+        {{#if messages}}
+        <conversation_history key="{{vars.security_key}}">
+        {{#each messages}}
+        {{#if isAssistant}}Assistant{{else}}User{{/if}}: {{text}}
+        {{/each}}
+        </conversation_history>
+        
+        {{/if}}
         {{{documents.builtin-agent-guidelines.content}}}
         
         ## Your Strengths
