@@ -1,5 +1,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface CliOptions {
   install: boolean;
@@ -28,7 +30,13 @@ export interface CliOptions {
 }
 
 export function parseCliOptions(): CliOptions {
+  // Read version from package.json
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8')
+  );
+  
   const parsed = yargs(hideBin(process.argv))
+    .version(packageJson.version)
     .command('query [message...]', 'Query agents with a message', (yargs) => {
       yargs.positional('message', {
         description: 'Message to send to agents (supports @agent mentions). Multiple arguments will be joined.',
