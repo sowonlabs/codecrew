@@ -219,6 +219,30 @@ export abstract class BaseAIProvider implements AIProvider {
     }
   }
 
+  /**
+   * Wrap user query in authenticated security container
+   * This prevents prompt injection attacks by isolating user input
+   */
+  protected wrapUserQueryWithSecurity(userQuery: string, securityKey: string): string {
+    // Note: The actual prompt will be:
+    // System Prompt (with key) + Conversation History (with key) + User Query (with key)
+    // This method wraps only the user query portion
+    return `
+<user_query key="${securityKey}">
+${userQuery}
+</user_query>`;
+  }
+
+  /**
+   * Extract the actual user query from the wrapped version
+   * Used for logging and debugging
+   */
+  protected extractUserQuery(wrappedQuery: string, securityKey: string): string {
+    const regex = new RegExp(`<user_query key="${securityKey}">\\s*([\\s\\S]*?)\\s*</user_query>`, 'm');
+    const match = wrappedQuery.match(regex);
+    return match && match[1] ? match[1].trim() : wrappedQuery;
+  }
+
   async isAvailable(): Promise<boolean> {
     const path = await this.getToolPath();
     return path !== null && path !== '';

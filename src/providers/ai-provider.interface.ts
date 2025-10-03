@@ -4,6 +4,7 @@ export interface AIQueryOptions {
   additionalArgs?: string[];
   taskId?: string;
   model?: string; // Model to use for this query (e.g., "sonnet", "gemini-2.5-pro", "gpt-5")
+  securityKey?: string; // Security key for prompt injection protection
 }
 
 export interface AIResponse {

@@ -398,10 +398,12 @@ Please check the agent ID and try again.`
       const workingDir = agent.workingDirectory || process.cwd();
       let systemPrompt = agent.systemPrompt || agent.description || `You are an expert ${agentId}.`;
 
+      // Generate security key for this session
+      const securityKey = this.generateSecurityKey();
+
       // If agent has a system prompt with template variables and messages are provided, process template
       if (systemPrompt && messages && messages.length > 0) {
         const { processDocumentTemplate } = await import('./utils/template-processor');
-        const securityKey = this.generateSecurityKey();
         
         const templateContext: TemplateContext = {
           env: process.env,
@@ -430,12 +432,18 @@ Specialties: ${agent.specialties?.join(', ') || 'General'}
 Capabilities: ${agent.capabilities?.join(', ') || 'Analysis'}
 Working Directory: ${workingDir}`;
 
+      // Wrap user query with security tag to prevent prompt injection
+      const wrappedQuery = `
+<user_query key="${securityKey}">
+${query}
+</user_query>`;
+
       const fullPrompt = `${systemPrompt}
 <Context>
 ${context ? `Context: ${context}\n\n` : ''}
 </Context>
 
-Query: ${query}`;
+${wrappedQuery}`;
 
       // Use agent's AI provider - using queryAI wrapper
       let response;
@@ -469,6 +477,7 @@ Query: ${query}`;
         additionalArgs: agentOptions, // Pass mode-specific options
         taskId, // Pass taskId to AIService
         model: modelToUse, // Use determined model
+        securityKey, // Pass security key for injection protection
       });
 
       // Handle task completion
