@@ -167,6 +167,11 @@ function registerHandlebarsHelpers() {
   Handlebars.registerHelper('not', function(a: any) {
     return !a;
   });
+
+  // JSON stringify helper: {{{json object}}}
+  Handlebars.registerHelper('json', function(context: any) {
+    return JSON.stringify(context, null, 2);
+  });
 }
 
 /**

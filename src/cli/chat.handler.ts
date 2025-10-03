@@ -140,6 +140,35 @@ export class ChatHandler {
         return;
       }
 
+      // Parse @mentions from message
+      const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g;
+      const matches = [...message.matchAll(mentionRegex)];
+      
+      // Extract query text (remove @mentions)
+      const query = message.replace(/@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g, '').trim();
+      
+      if (!query) {
+        console.error('❌ No message content after @mentions');
+        return;
+      }
+
+      // Determine which agents to use
+      const parsedQueries: Array<{ agentId: string; query: string; model?: string }> = [];
+      
+      if (matches.length > 0) {
+        // Use mentioned agents
+        for (const match of matches) {
+          const agentId = match[1];
+          const model = match[2];
+          if (agentId) {
+            parsedQueries.push({ agentId, query, model });
+          }
+        }
+      } else {
+        // No mentions - use default agent
+        parsedQueries.push({ agentId: 'mcp_test_agent', query });
+      }
+
       // Add user message to history
       await this.conversationProvider.addMessage(
         this.currentThreadId,
@@ -157,40 +186,104 @@ export class ChatHandler {
         },
       );
 
-      // Format history for AI
+      // Get conversation messages for template context
+      const conversationMessages = thread.messages.map((msg: any) => ({
+        text: msg.text,
+        isAssistant: msg.isAssistant
+      }));
+
+      // Format history for AI (fallback context)
       const historyContext = await this.conversationProvider.formatForAI(thread, {
         excludeCurrent: true,
       });
 
       // Build context
       const context = historyContext
-        ? `${historyContext}\n\nCurrent question: ${message}`
-        : message;
+        ? `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\n${historyContext}\n\nCurrent question: ${query}`
+        : `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\nCurrent question: ${query}`;
 
       console.log('🤖 CodeCrew: ');
 
-      // Query agent with history
-      const result = await this.codeCrewTool.queryAgent({
-        agentId: 'mcp_test_agent',
-        query: message,
-        context: `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\n${context}`,
-      });
+      // Execute query (single or parallel)
+      if (parsedQueries.length === 1) {
+        // Single agent query
+        const firstQuery = parsedQueries[0];
+        if (!firstQuery) {
+          console.error('❌ No valid queries found');
+          return;
+        }
+        const { agentId, model } = firstQuery;
+        const result = await this.codeCrewTool.queryAgent({
+          agentId,
+          query,
+          context,
+          model,
+          messages: conversationMessages // Pass messages for template context
+        });
 
-      // Extract response
-      const responseText =
-        result.content && result.content[0]
-          ? result.content[0].text
-          : 'No response';
+        // Extract response
+        const responseText =
+          result.content && result.content[0]
+            ? result.content[0].text
+            : 'No response';
 
-      console.log(responseText);
+        if (result.success) {
+          console.log(responseText);
 
-      // Add assistant response to history
-      await this.conversationProvider.addMessage(
-        this.currentThreadId,
-        'codecrew',
-        responseText,
-        true,
-      );
+          // Add assistant response to history
+          await this.conversationProvider.addMessage(
+            this.currentThreadId,
+            agentId,
+            responseText,
+            true,
+          );
+        } else {
+          console.error(`❌ Error: ${result.error || 'Query failed'}`);
+        }
+      } else {
+        // Multiple agents - parallel execution
+        console.log(`🚀 Querying ${parsedQueries.length} agents in parallel...\n`);
+        
+        const queries = parsedQueries.map(pq => ({
+          agentId: pq.agentId,
+          query: pq.query,
+          context,
+          model: pq.model,
+          messages: conversationMessages // Pass messages for template context
+        }));
+
+        const result = await this.codeCrewTool.queryAgentParallel({ queries });
+
+        // Display results
+        if (result.results && Array.isArray(result.results)) {
+          let hasAnySuccess = false;
+          
+          for (const agentResult of result.results) {
+            console.log(`\n${'═'.repeat(60)}`);
+            console.log(`Agent: @${agentResult.agentId} ${agentResult.success ? '✅' : '❌'}`);
+            console.log('─'.repeat(60));
+            
+            if (agentResult.success) {
+              hasAnySuccess = true;
+              console.log(agentResult.response || 'No response');
+              
+              // Add to history
+              await this.conversationProvider.addMessage(
+                this.currentThreadId,
+                agentResult.agentId,
+                agentResult.response || 'No response',
+                true,
+              );
+            } else {
+              console.error(`Error: ${agentResult.error || 'Unknown error'}`);
+            }
+          }
+          
+          if (!hasAnySuccess) {
+            console.error('\n❌ All agents failed');
+          }
+        }
+      }
 
       console.log(`\n💾 Conversation saved to thread: ${this.currentThreadId}`);
     } catch (error: any) {
@@ -203,102 +296,204 @@ export class ChatHandler {
    * Start interactive chat session
    */
   private async startInteractiveChat(): Promise<void> {
-    console.log('\n💬 Interactive Chat Mode');
-    console.log('Type your message and press Enter. Type "exit" or "quit" to end.\n');
+    return new Promise<void>((resolve) => {
+      console.log('\n💬 Interactive Chat Mode');
+      console.log('Type your message and press Enter. Type "exit" or "quit" to end.');
+      console.log('💡 Tip: Use @agent_name to query specific agents (e.g., @claude What is TypeScript?)\n');
 
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-      prompt: '🧑 You: ',
-    });
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        prompt: '🧑 You: ',
+      });
 
-    rl.prompt();
+      rl.prompt();
 
-    rl.on('line', async (input: string) => {
-      const message = input.trim();
+      rl.on('line', async (input: string) => {
+        const message = input.trim();
 
-      // Check for exit commands
-      if (message.toLowerCase() === 'exit' || message.toLowerCase() === 'quit') {
-        console.log(`\n👋 Conversation saved as: ${this.currentThreadId}`);
-        rl.close();
-        process.exit(0);
-      }
+        // Check for exit commands
+        if (message.toLowerCase() === 'exit' || message.toLowerCase() === 'quit') {
+          console.log(`\n👋 Conversation saved as: ${this.currentThreadId}`);
+          rl.close();
+          resolve();
+          process.exit(0);
+        }
 
-      if (!message) {
-        rl.prompt();
-        return;
-      }
-
-      try {
-        if (!this.currentThreadId) {
-          console.error('❌ No active conversation thread\n');
+        if (!message) {
           rl.prompt();
           return;
         }
 
-        // Add user message to history
-        await this.conversationProvider.addMessage(
-          this.currentThreadId,
-          os.userInfo().username,
-          message,
-          false,
-        );
+        try {
+          if (!this.currentThreadId) {
+            console.error('❌ No active conversation thread\n');
+            rl.prompt();
+            return;
+          }
 
-        // Fetch conversation history
-        const thread = await this.conversationProvider.fetchHistory(
-          this.currentThreadId,
-          {
-            limit: 20,
-            maxContextLength: 4000,
-          },
-        );
+          // Parse @mentions from message
+          const mentionRegex = /@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g;
+          const matches = [...message.matchAll(mentionRegex)];
+          
+          // Extract query text (remove @mentions)
+          const query = message.replace(/@([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-zA-Z0-9._-]+))?/g, '').trim();
+          
+          if (!query) {
+            console.error('❌ No message content after @mentions\n');
+            rl.prompt();
+            return;
+          }
 
-        // Format history for AI
-        const historyContext = this.conversationProvider.formatForAI(thread, {
-          excludeCurrent: true,
-        });
+          // Determine which agents to use
+          const parsedQueries: Array<{ agentId: string; query: string; model?: string }> = [];
+          
+          if (matches.length > 0) {
+            // Use mentioned agents
+            for (const match of matches) {
+              const agentId = match[1];
+              const model = match[2];
+              if (agentId) {
+                parsedQueries.push({ agentId, query, model });
+              }
+            }
+          } else {
+            // No mentions - use default agent
+            parsedQueries.push({ agentId: 'mcp_test_agent', query });
+          }
 
-        // Build context
-        const context = historyContext
-          ? `${historyContext}\n\nCurrent question: ${message}`
-          : message;
+          // Add user message to history
+          await this.conversationProvider.addMessage(
+            this.currentThreadId,
+            os.userInfo().username,
+            message,
+            false,
+          );
 
-        console.log('🤖 CodeCrew: ');
+          // Fetch conversation history
+          const thread = await this.conversationProvider.fetchHistory(
+            this.currentThreadId,
+            {
+              limit: 20,
+              maxContextLength: 4000,
+            },
+          );
 
-        // Query agent with history
-        const result = await this.codeCrewTool.queryAgent({
-          agentId: 'mcp_test_agent',
-          query: message,
-          context: `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\n${context}`,
-        });
+          // Get conversation messages for template context
+          const conversationMessages = thread.messages.map((msg: any) => ({
+            text: msg.text,
+            isAssistant: msg.isAssistant
+          }));
 
-        // Extract response
-        const responseText =
-          result.content && result.content[0]
-            ? result.content[0].text
-            : 'No response';
+          // Format history for AI (fallback context)
+          const historyContext = this.conversationProvider.formatForAI(thread, {
+            excludeCurrent: true,
+          });
 
-        console.log(responseText);
-        console.log();
+          // Build context
+          const context = historyContext
+            ? `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\n${historyContext}\n\nCurrent question: ${query}`
+            : `CLI chat session\nThread: ${this.currentThreadId}\nUser: ${os.userInfo().username}\n\nCurrent question: ${query}`;
 
-        // Add assistant response to history
-        await this.conversationProvider.addMessage(
-          this.currentThreadId,
-          'codecrew',
-          responseText,
-          true,
-        );
-      } catch (error: any) {
-        this.logger.error(`Error processing message: ${error.message}`);
-        console.error(`❌ Error: ${error.message}\n`);
-      }
+          console.log('🤖 CodeCrew: ');
 
-      rl.prompt();
-    });
+          // Execute query (single or parallel)
+          if (parsedQueries.length === 1) {
+            // Single agent query
+            const firstQuery = parsedQueries[0];
+            if (!firstQuery) {
+              console.error('❌ No valid queries found\n');
+              rl.prompt();
+              return;
+            }
+            const { agentId, model } = firstQuery;
+            const result = await this.codeCrewTool.queryAgent({
+              agentId,
+              query,
+              context,
+              model,
+              messages: conversationMessages // Pass messages for template context
+            });
 
-    rl.on('close', () => {
-      console.log(`\n👋 Conversation saved as: ${this.currentThreadId}`);
-      process.exit(0);
+            // Extract response
+            const responseText =
+              result.content && result.content[0]
+                ? result.content[0].text
+                : 'No response';
+
+            if (result.success) {
+              console.log(responseText);
+              console.log();
+
+              // Add assistant response to history
+              await this.conversationProvider.addMessage(
+                this.currentThreadId,
+                agentId,
+                responseText,
+                true,
+              );
+            } else {
+              console.error(`❌ Error: ${result.error || 'Query failed'}\n`);
+            }
+          } else {
+            // Multiple agents - parallel execution
+            console.log(`🚀 Querying ${parsedQueries.length} agents in parallel...\n`);
+            
+            const queries = parsedQueries.map(pq => ({
+              agentId: pq.agentId,
+              query: pq.query,
+              context,
+              model: pq.model,
+              messages: conversationMessages // Pass messages for template context
+            }));
+
+            const result = await this.codeCrewTool.queryAgentParallel({ queries });
+
+            // Display results
+            if (result.results && Array.isArray(result.results)) {
+              let hasAnySuccess = false;
+              
+              for (const agentResult of result.results) {
+                console.log(`\n${'═'.repeat(50)}`);
+                console.log(`Agent: @${agentResult.agentId} ${agentResult.success ? '✅' : '❌'}`);
+                console.log('─'.repeat(50));
+                
+                if (agentResult.success) {
+                  hasAnySuccess = true;
+                  console.log(agentResult.response || 'No response');
+                  
+                  // Add to history
+                  await this.conversationProvider.addMessage(
+                    this.currentThreadId,
+                    agentResult.agentId,
+                    agentResult.response || 'No response',
+                    true,
+                  );
+                } else {
+                  console.error(`Error: ${agentResult.error || 'Unknown error'}`);
+                }
+              }
+              
+              console.log();
+              
+              if (!hasAnySuccess) {
+                console.error('❌ All agents failed\n');
+              }
+            }
+          }
+        } catch (error: any) {
+          this.logger.error(`Error processing message: ${error.message}`);
+          console.error(`❌ Error: ${error.message}\n`);
+        }
+
+        rl.prompt();
+      });
+
+      rl.on('close', () => {
+        console.log(`\n👋 Conversation saved as: ${this.currentThreadId}`);
+        resolve();
+        process.exit(0);
+      });
     });
   }
 

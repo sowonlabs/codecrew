@@ -236,26 +236,11 @@ export async function handleQuery(app: any, args: CliOptions) {
 
       result = await codeCrewTool.queryAgentParallel({ queries });
 
-      // Check for any errors in parallel execution
-      if (!result.success) {
-        const errorMsg = `Error: Parallel query failed - ${result.error || 'Unknown error'}`;
-        console.error(errorMsg);
-        process.exit(1);
-      }
+      // Don't exit immediately on partial failures - display all results first
+      const hasAnySuccess = result.results && result.results.some((r: any) => r.success);
+      const allFailed = result.results && result.results.every((r: any) => !r.success);
 
-      // Check individual results for errors
-      const hasErrors = result.results && result.results.some((r: any) => !r.success);
-      if (hasErrors) {
-        const failedAgents = result.results
-          .filter((r: any) => !r.success)
-          .map((r: any) => `@${r.agentId}: ${r.error}`)
-          .join(', ');
-        const errorMsg = `Error: Some agents failed - ${failedAgents}`;
-        console.error(errorMsg);
-        process.exit(1);
-      }
-
-      // Only save to conversation history after all successful responses
+      // Only save to conversation history for successful responses
       if (conversationProvider && threadId) {
         // Save user messages
         for (const pq of parsedQueries) {
@@ -285,7 +270,7 @@ export async function handleQuery(app: any, args: CliOptions) {
 
       // 5. Format and output results for parallel agents
       if (args.raw) {
-        // Raw mode: output only AI responses, one per line
+        // Raw mode: output only successful AI responses, one per line
         if (result.results && Array.isArray(result.results)) {
           result.results.forEach((agentResult: any) => {
             if (agentResult.success) {
@@ -296,6 +281,18 @@ export async function handleQuery(app: any, args: CliOptions) {
       } else {
         const validAgentIds = parsedQueries.map(pq => pq.agentId);
         formatParallelAgentResults(result, validAgentIds, '');
+      }
+
+      // Only exit with error if ALL agents failed
+      if (allFailed) {
+        const errorMsg = `Error: All agents failed`;
+        console.error(`\n${errorMsg}`);
+        process.exit(1);
+      } else if (!hasAnySuccess) {
+        // This shouldn't happen but handle it anyway
+        const errorMsg = `Error: Parallel query failed - ${result.error || 'Unknown error'}`;
+        console.error(errorMsg);
+        process.exit(1);
       }
     }
 

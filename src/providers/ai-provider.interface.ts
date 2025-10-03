@@ -13,6 +13,11 @@ export interface AIResponse {
   success: boolean;
   error?: string;
   taskId?: string;
+  toolCall?: {
+    toolName: string;
+    toolInput: any;
+    toolResult: any;
+  };
 }
 
 export interface AIProvider {
