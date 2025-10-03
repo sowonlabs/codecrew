@@ -151,7 +151,11 @@ Please continue with your response based on this tool result.`;
   /**
    * Parse Copilot's response to detect tool usage
    */
-  private parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+  /**
+   * Parse Copilot's response to detect tool usage
+   * Overrides base implementation to handle Copilot-specific formats
+   */
+  protected parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
     console.log(`🔍 DEBUG: parseToolUse input length: ${content.length}`);
     console.log(`🔍 DEBUG: parseToolUse input: ${JSON.stringify(content.substring(0, 300))}`);
     

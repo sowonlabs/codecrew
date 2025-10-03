@@ -203,8 +203,9 @@ Based on the tool execution result above, please provide a clear, detailed, and 
 
   /**
    * Parse Claude's JSON response to detect tool usage
+   * Overrides base implementation to handle Claude-specific JSONL format
    */
-  private parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+  protected parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
     // First, try to extract from CodeCrew XML tags in the content
     const xmlMatch = content.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
     if (xmlMatch && xmlMatch[1]) {
@@ -397,6 +398,11 @@ Based on the tool execution result above, please provide a clear, detailed, and 
 
     while (turn < maxTurns) {
       this.logger.log(`Tool call turn ${turn + 1}/${maxTurns}`);
+      
+      // Log to task file
+      if (options.taskId) {
+        this['appendTaskLog'](options.taskId, 'INFO', `--- Tool Call Turn ${turn + 1}/${maxTurns} ---`);
+      }
 
       // Execute query
       const response = await this.query(currentPrompt, options);
@@ -418,6 +424,10 @@ Based on the tool execution result above, please provide a clear, detailed, and 
         // No tool use detected, return the response
         this.logger.log('No tool use detected, returning response');
         
+        if (options.taskId) {
+          this['appendTaskLog'](options.taskId, 'INFO', `No tool use detected, returning final response`);
+        }
+        
         // Parse JSONL to extract final result text
         const parsedContent = this.parseJsonlResponse(response.content);
         
@@ -429,6 +439,11 @@ Based on the tool execution result above, please provide a clear, detailed, and 
 
       // Execute the tool
       this.logger.log(`Executing tool: ${toolUse.toolName}`);
+      
+      if (options.taskId) {
+        this['appendTaskLog'](options.taskId, 'INFO', `🔧 Claude requested tool: ${toolUse.toolName}`);
+        this['appendTaskLog'](options.taskId, 'INFO', `Tool input: ${JSON.stringify(toolUse.toolInput, null, 2)}`);
+      }
 
       try {
         const toolResult = await this.toolCallService.execute(
@@ -437,6 +452,11 @@ Based on the tool execution result above, please provide a clear, detailed, and 
         );
 
         this.logger.log(`Tool executed successfully: ${toolUse.toolName}`);
+        
+        if (options.taskId) {
+          this['appendTaskLog'](options.taskId, 'INFO', `✅ Tool executed successfully`);
+          this['appendTaskLog'](options.taskId, 'INFO', `Tool result preview: ${JSON.stringify(toolResult).substring(0, 500)}...`);
+        }
         
         // Build follow-up prompt with tool result
         // AI will interpret the result and provide a human-friendly response

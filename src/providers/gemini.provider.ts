@@ -41,25 +41,25 @@ export class GeminiProvider extends BaseAIProvider {
       return prompt;
     }
 
-    const toolDefinitions = tools.map((t) => ({
-      name: t.name,
-      description: t.description,
-      input_schema: t.input_schema,
-    }));
-
     const toolsSection = `
-The following tools are available to answer the user's question.
-You have the ability to execute these tools and observe their output.
 
-Tools:
-${JSON.stringify(toolDefinitions, null, 2)}
+Available tools:
+${tools.map(t => `- ${t.name}: ${t.description}
+  Input schema: ${JSON.stringify(t.input_schema, null, 2)}`).join('\n')}
 
-Based on the user's request and the available tools, generate the response.
-If you use a tool, the system will execute it and provide you with the result.
+To use a tool, wrap your JSON response in <codecrew_tool_call> tags like this:
+<codecrew_tool_call>
+{
+  "type": "tool_use",
+  "name": "tool_name",
+  "input": { ...tool parameters... }
+}
+</codecrew_tool_call>
 
-User's prompt: ${prompt}
+If you don't need to use a tool, respond normally.
 `;
-    return toolsSection;
+
+    return toolsSection + '\n' + prompt;
   }
 
   async query(
@@ -95,65 +95,31 @@ User's prompt: ${prompt}
   }
 
   /**
-   * Parse Gemini's response to detect tool usage
+   * Gemini-specific JSON parsing
+   * Checks for XML in JSON response field
    */
-  private parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
-    console.log(`🔍 DEBUG: parseToolUse input length: ${content.length}`);
-    console.log(`🔍 DEBUG: parseToolUse input: ${JSON.stringify(content.substring(0, 300))}`);
-    
-    // First, try to extract from CodeCrew XML tags
-    const xmlMatch = content.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
-    if (xmlMatch && xmlMatch[1]) {
-      console.log(`🔍 DEBUG: Found CodeCrew XML tag`);
-      try {
-        const jsonContent = xmlMatch[1].trim();
-        console.log(`🔍 DEBUG: XML content: ${JSON.stringify(jsonContent.substring(0, 200))}`);
-        const parsed = JSON.parse(jsonContent);
-        if (parsed.type === 'tool_use' && parsed.name && parsed.input) {
-          console.log(`✅ DEBUG: Extracted tool_use from XML: ${parsed.name}`);
-          this.logger.log(`Tool use detected: ${parsed.name} with input ${JSON.stringify(parsed.input)}`);
-          return {
-            isToolUse: true,
-            toolName: parsed.name,
-            toolInput: parsed.input,
-          };
-        }
-      } catch (e) {
-        console.log(`❌ DEBUG: Failed to parse XML JSON: ${e}`);
-      }
-    }
-    
-    // Second, try to parse as JSON (Gemini JSON output format)
-    try {
-      const parsed = JSON.parse(content);
-      
-      // Check if response field has XML tags
-      if (parsed.response && typeof parsed.response === 'string') {
-        const responseXml = parsed.response.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
-        if (responseXml && responseXml[1]) {
-          console.log(`🔍 DEBUG: Found XML in JSON response field`);
-          try {
-            const jsonContent = responseXml[1].trim();
-            const toolParsed = JSON.parse(jsonContent);
-            if (toolParsed.type === 'tool_use' && toolParsed.name && toolParsed.input) {
-              console.log(`✅ DEBUG: Extracted tool_use from JSON response: ${toolParsed.name}`);
-              this.logger.log(`Tool use detected: ${toolParsed.name} with input ${JSON.stringify(toolParsed.input)}`);
-              return {
-                isToolUse: true,
-                toolName: toolParsed.name,
-                toolInput: toolParsed.input,
-              };
-            }
-          } catch (e) {
-            console.log(`❌ DEBUG: Failed to parse tool from JSON response: ${e}`);
+  protected parseToolUseProviderSpecific(parsed: any): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+    // Gemini-specific: Check JSON response field
+    if (parsed.response && typeof parsed.response === 'string') {
+      const responseXml = parsed.response.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
+      if (responseXml && responseXml[1]) {
+        try {
+          const jsonContent = responseXml[1].trim();
+          const toolParsed = JSON.parse(jsonContent);
+          if (toolParsed.type === 'tool_use' && toolParsed.name && toolParsed.input !== undefined) {
+            this.logger.log(`Tool use detected from Gemini JSON response field: ${toolParsed.name}`);
+            return {
+              isToolUse: true,
+              toolName: toolParsed.name,
+              toolInput: toolParsed.input,
+            };
           }
+        } catch (e) {
+          // Failed to parse
         }
       }
-    } catch (error) {
-      console.log(`⚠️ DEBUG: Not JSON format, continuing...`);
     }
 
-    console.log(`❌ DEBUG: No tool use found`);
     return { isToolUse: false };
   }
 
@@ -182,6 +148,11 @@ User's prompt: ${prompt}
     while (turn < maxTurns) {
       console.log(`🔄 DEBUG: Tool call turn ${turn + 1}/${maxTurns}`);
       this.logger.log(`Tool call turn ${turn + 1}/${maxTurns}`);
+      
+      // Log to task file
+      if (options.taskId) {
+        this['appendTaskLog'](options.taskId, 'INFO', `--- Tool Call Turn ${turn + 1}/${maxTurns} ---`);
+      }
 
       // Use super.query for all turns to get plain text responses
       const response = await super.query(currentPrompt, options);
@@ -200,6 +171,9 @@ User's prompt: ${prompt}
 
       if (!toolUse.isToolUse) {
         console.log(`✅ DEBUG: No tool use detected, returning response`);
+        if (options.taskId) {
+          this['appendTaskLog'](options.taskId, 'INFO', `No tool use detected, returning final response`);
+        }
         // No tool use, return the final response
         return response;
       }
@@ -208,6 +182,11 @@ User's prompt: ${prompt}
       console.log(`🔧 DEBUG: Executing tool: ${toolUse.toolName}`);
       this.logger.log(`Executing tool: ${toolUse.toolName!} with input ${JSON.stringify(toolUse.toolInput)}`);
       
+      if (options.taskId) {
+        this['appendTaskLog'](options.taskId, 'INFO', `🔧 Gemini requested tool: ${toolUse.toolName}`);
+        this['appendTaskLog'](options.taskId, 'INFO', `Tool input: ${JSON.stringify(toolUse.toolInput, null, 2)}`);
+      }
+      
       const toolResult = await this.toolCallService.execute(
         toolUse.toolName!,
         toolUse.toolInput,
@@ -215,6 +194,11 @@ User's prompt: ${prompt}
 
       console.log(`🔧 DEBUG: Tool result: ${JSON.stringify(toolResult).substring(0, 200)}`);
       this.logger.log(`Tool result: ${JSON.stringify(toolResult)}`);
+      
+      if (options.taskId) {
+        this['appendTaskLog'](options.taskId, 'INFO', `✅ Tool executed successfully`);
+        this['appendTaskLog'](options.taskId, 'INFO', `Tool result preview: ${JSON.stringify(toolResult).substring(0, 500)}...`);
+      }
 
       // Build the next prompt with tool result
       currentPrompt = this.buildToolResultPrompt(
@@ -238,11 +222,14 @@ User's prompt: ${prompt}
   }
 
   private buildToolResultPrompt(toolName: string, toolInput: any, toolResult: any): string {
-    return `Tool execution result:
-Tool: ${toolName}
-Input: ${JSON.stringify(toolInput)}
-Result: ${JSON.stringify(toolResult)}
+    const resultData = toolResult.success && toolResult.data ? toolResult.data : toolResult;
+    
+    return `The ${toolName} tool has been executed successfully.
 
-Please continue with your response based on this tool result.`;
+<tool_result>
+${JSON.stringify(resultData, null, 2)}
+</tool_result>
+
+Based on the tool execution result above, please provide a clear, detailed, and user-friendly response to the user's original request. Present the information in an organized and easy-to-read format.`;
   }
 }
