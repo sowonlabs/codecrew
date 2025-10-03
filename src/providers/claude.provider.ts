@@ -159,19 +159,53 @@ If you don't need to use a tool, respond normally.
    * Build a follow-up prompt with tool execution result
    */
   private buildFollowUpPrompt(toolName: string, toolInput: any, toolResult: any): string {
-    return `Tool execution result:
-Tool: ${toolName}
-Input: ${JSON.stringify(toolInput)}
-Result: ${JSON.stringify(toolResult)}
+    const resultData = toolResult.success && toolResult.data ? toolResult.data : toolResult;
+    
+    return `The ${toolName} tool has been executed successfully.
 
-Please continue with your response based on this tool result.`;
+<tool_result>
+${JSON.stringify(resultData, null, 2)}
+</tool_result>
+
+Based on the tool execution result above, please provide a clear, detailed, and user-friendly response to the user's original request. Present the information in an organized and easy-to-read format.`;
+  }
+
+  /**
+   * Parse JSONL (JSON Lines) output and extract the final result text
+   * Claude CLI returns multiple JSON objects separated by newlines:
+   * {"type":"system",...}
+   * {"type":"assistant",...}
+   * {"type":"result","result":"final text"}
+   */
+  private parseJsonlResponse(content: string): string {
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    // Try to find the last "result" type object
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const line = lines[i];
+        if (!line) continue;
+        
+        const parsed = JSON.parse(line);
+        if (parsed.type === 'result' && parsed.result) {
+          this.logger.log('✅ Extracted final result from JSONL');
+          return parsed.result;
+        }
+      } catch (e) {
+        // Not valid JSON, skip
+      }
+    }
+    
+    // If no result found, return the original content
+    this.logger.warn('⚠️ Could not parse JSONL, returning original content');
+    return content;
   }
 
   /**
    * Parse Claude's JSON response to detect tool usage
    */
   private parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
-    // First, try to extract from CodeCrew XML tags
+    // First, try to extract from CodeCrew XML tags in the content
     const xmlMatch = content.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
     if (xmlMatch && xmlMatch[1]) {
       try {
@@ -190,6 +224,118 @@ Please continue with your response based on this tool result.`;
       }
     }
     
+    // Try parsing as JSONL (multiple JSON objects separated by newlines)
+    const lines = content.split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        
+        // Check for result.result containing XML tags
+        if (parsed.type === 'result' && parsed.result) {
+          const xmlMatch = parsed.result.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
+          if (xmlMatch && xmlMatch[1]) {
+            const toolCallJson = JSON.parse(xmlMatch[1].trim());
+            if (toolCallJson.type === 'tool_use' && toolCallJson.name && toolCallJson.input) {
+              this.logger.log(`Tool use detected from result XML: ${toolCallJson.name}`);
+              return {
+                isToolUse: true,
+                toolName: toolCallJson.name,
+                toolInput: toolCallJson.input,
+              };
+            }
+          }
+        }
+        
+        // Check for assistant message with tool_use content
+        if (parsed.type === 'assistant' && parsed.message?.content) {
+          const content = parsed.message.content;
+          if (Array.isArray(content)) {
+            for (const item of content) {
+              if (item.type === 'text' && item.text) {
+                // Check for XML-wrapped tool call
+                const xmlMatch = item.text.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
+                if (xmlMatch && xmlMatch[1]) {
+                  const toolCallJson = JSON.parse(xmlMatch[1].trim());
+                  if (toolCallJson.type === 'tool_use' && toolCallJson.name && toolCallJson.input) {
+                    this.logger.log(`Tool use detected from assistant message: ${toolCallJson.name}`);
+                    return {
+                      isToolUse: true,
+                      toolName: toolCallJson.name,
+                      toolInput: toolCallJson.input,
+                    };
+                  }
+                }
+                
+                // Check for JSON code block (```json ... ```)
+                const jsonBlockMatch = item.text.match(/```json\s*([\s\S]*?)\s*```/);
+                if (jsonBlockMatch && jsonBlockMatch[1]) {
+                  try {
+                    const toolCallJson = JSON.parse(jsonBlockMatch[1].trim());
+                    if (toolCallJson.type === 'tool_use' && toolCallJson.name && toolCallJson.input) {
+                      this.logger.log(`Tool use detected from JSON code block: ${toolCallJson.name}`);
+                      return {
+                        isToolUse: true,
+                        toolName: toolCallJson.name,
+                        toolInput: toolCallJson.input,
+                      };
+                    }
+                  } catch (e) {
+                    // Not valid JSON in code block
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        // Check for result.result containing JSON code block
+        if (parsed.type === 'result' && parsed.result) {
+          const jsonBlockMatch = parsed.result.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonBlockMatch && jsonBlockMatch[1]) {
+            try {
+              const toolCallJson = JSON.parse(jsonBlockMatch[1].trim());
+              if (toolCallJson.type === 'tool_use' && toolCallJson.name && toolCallJson.input) {
+                this.logger.log(`Tool use detected from result JSON block: ${toolCallJson.name}`);
+                return {
+                  isToolUse: true,
+                  toolName: toolCallJson.name,
+                  toolInput: toolCallJson.input,
+                };
+              }
+            } catch (e) {
+              // Not valid JSON in code block
+            }
+          }
+        }
+      } catch (e) {
+        // Not valid JSON or doesn't match expected format
+      }
+    }
+    
+    // Try to find JSON object in plain text (e.g., in markdown or text response)
+    // Pattern: {...} that contains "type": "tool_use"
+    const jsonObjectPattern = /\{[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\}/g;
+    const jsonMatches = content.match(jsonObjectPattern);
+
+    if (jsonMatches) {
+      for (const jsonMatch of jsonMatches) {
+        try {
+          const parsed = JSON.parse(jsonMatch);
+          if (parsed.type === 'tool_use' && parsed.name && parsed.input !== undefined) {
+            this.logger.log(`Tool use detected from plain text JSON: ${parsed.name}`);
+            return {
+              isToolUse: true,
+              toolName: parsed.name,
+              toolInput: parsed.input,
+            };
+          }
+        } catch (e) {
+          // Not valid JSON
+        }
+      }
+    }
+
+    // Original parsing logic as fallback
     try {
       const parsed = JSON.parse(content);
 
@@ -255,6 +401,9 @@ Please continue with your response based on this tool result.`;
       // Execute query
       const response = await this.query(currentPrompt, options);
 
+      console.log(`🔧 DEBUG: Response content type: ${typeof response.content}`);
+      console.log(`🔧 DEBUG: Response content (first 500 chars): ${response.content.substring(0, 500)}`);
+
       if (!response.success) {
         return response;
       }
@@ -262,10 +411,20 @@ Please continue with your response based on this tool result.`;
       // Check if response contains tool use
       const toolUse = this.parseToolUse(response.content);
 
+      this.logger.log(`Tool use check result: ${JSON.stringify(toolUse)}`);
+      console.log(`🔧 DEBUG: Tool use check - isToolUse: ${toolUse.isToolUse}, toolName: ${toolUse.toolName}`);
+
       if (!toolUse.isToolUse) {
         // No tool use detected, return the response
         this.logger.log('No tool use detected, returning response');
-        return response;
+        
+        // Parse JSONL to extract final result text
+        const parsedContent = this.parseJsonlResponse(response.content);
+        
+        return {
+          ...response,
+          content: parsedContent,
+        };
       }
 
       // Execute the tool
@@ -277,7 +436,10 @@ Please continue with your response based on this tool result.`;
           toolUse.toolInput!
         );
 
+        this.logger.log(`Tool executed successfully: ${toolUse.toolName}`);
+        
         // Build follow-up prompt with tool result
+        // AI will interpret the result and provide a human-friendly response
         currentPrompt = this.buildFollowUpPrompt(
           toolUse.toolName!,
           toolUse.toolInput!,
