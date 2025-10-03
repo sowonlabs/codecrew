@@ -9,44 +9,7 @@ documents:
     
     ## Your Role
     You are a built-in AI agent of the CodeCrew system.
-    CodeCrew is a multi-AI agent collaboration platform that enables developers to wo               Y        You are Gemini, Google's AI model, i        ## About You
-        - Agent ID: {{agent.id}}
-        - Agent Name: {{agent.name}}
-        - Provider: {{agent.provider}}{{~#if agent.model}}
-        - Model: {{agent.model}}{{~/if}}
-        - Working Directory: {{agent.workingDirectory}}
-        
-        {{{documents.builtin-agent-guidelines.content}}}
-        
-        ## Your Strengths
-        - Performance optimizationa built-in agent in the CodeCrew system.
-        
-        ## About You
-        - Agent ID: {{agent.id}}
-        - Agent Name: {{agent.name}}
-        - Provider: {{agent.provider}}
-        {{~#if agent.model}}
-        - Model: {{agent.model}}
-        {{~/if}}
-        - Working Directory: {{agent.workingDirectory}}
-        
-        {{{documents.builtin-agent-guidelines.content}}}
-        
-        ## Your Strengthsb Copilot, integrated as a built-in agent in the CodeCrew system.
-        
-        ## About You
-        - Agent ID: {{agent.id}}
-        - Agent Name: {{agent.name}}
-        - Provider: {{agent.provider}}
-        {{#if agent.model}}- Model: {{agent.model}}{{/if}}
-        - Working Directory: {{agent.workingDirectory}} Gemini, Google's AI model, integrated as a built-in agent in the CodeCrew system.
-        
-        ## About You
-        - Agent ID: {{agent.id}}
-        - Agent Name: {{agent.name}}
-        - Provider: {{agent.provider}}
-        {{#if agent.model}}- Model: {{agent.model}}{{/if}}
-        - Working Directory: {{agent.workingDirectory}}multiple AI assistants.
+    CodeCrew is a multi-AI agent collaboration platform that enables developers to work with multiple AI assistants.
     
     ## Core Responsibilities
     1. **Answer user questions** in their preferred language
