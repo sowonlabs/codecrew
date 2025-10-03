@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { McpTool } from '@sowonai/nestjs-mcp-adapter';
 import { z } from 'zod';
 import * as fs from 'fs';
@@ -20,7 +20,7 @@ import { AgentLoaderService } from './services/agent-loader.service';
 import type { TemplateContext } from './utils/template-processor';
 
 @Injectable()
-export class CodeCrewTool {
+export class CodeCrewTool implements OnModuleInit {
   private readonly logger = new Logger(CodeCrewTool.name);
 
   /**
@@ -65,13 +65,15 @@ export class CodeCrewTool {
     private readonly documentLoaderService: DocumentLoaderService,
     private readonly toolCallService: ToolCallService,
     private readonly agentLoaderService: AgentLoaderService,
-  ) {
-    // Register this instance to ToolCallService to enable MCP tools
-    // This must be done after construction to avoid circular dependency
-    setTimeout(() => {
-      this.toolCallService.setCodeCrewTool(this);
-      this.logger.log('CodeCrewTool registered to ToolCallService');
-    }, 0);
+  ) {}
+
+  /**
+   * NestJS lifecycle hook - called after module initialization
+   * This is the right place to register MCP tools to avoid circular dependency issues
+   */
+  onModuleInit() {
+    this.toolCallService.setCodeCrewTool(this);
+    this.logger.log('CodeCrewTool registered to ToolCallService');
   }
 
 
