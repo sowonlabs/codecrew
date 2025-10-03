@@ -229,30 +229,70 @@ Please continue with your response based on this tool result.`;
       }
       
       // Fallback: Look for JSON objects in the content
-      const jsonMatch = content.match(/\{[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\}(?:\s*\n)?/);
-      console.log(`🔍 DEBUG: jsonMatch found: ${!!jsonMatch}`);
+      // First, clean up bullet points and whitespace from the beginning of each line
+      const cleanedContent = content
+        .split('\n')
+        .map(line => line.replace(/^[●\-\*\s]+/, ''))
+        .join('\n');
       
-      if (jsonMatch) {
-        console.log(`🔍 DEBUG: jsonMatch[0]: ${JSON.stringify(jsonMatch[0].substring(0, 200))}`);
-        try {
-          // Clean up the JSON string (remove leading symbols like ●, -, *, etc.)
-          const cleanJson = jsonMatch[0].replace(/^[●\-\*\s]+/, '').trim();
-          console.log(`🔍 DEBUG: cleanJson: ${JSON.stringify(cleanJson.substring(0, 200))}`);
+      // Find the starting position of the JSON object
+      const startMatch = cleanedContent.match(/\{\s*"type"\s*:\s*"tool_use"/);
+      if (startMatch && startMatch.index !== undefined) {
+        console.log(`🔍 DEBUG: Found JSON start at index ${startMatch.index}`);
+        
+        // Starting from that position, count braces to find the complete JSON
+        let braceCount = 0;
+        let inString = false;
+        let escapeNext = false;
+        let jsonStr = '';
+        
+        for (let i = startMatch.index; i < cleanedContent.length; i++) {
+          const char = cleanedContent[i];
+          jsonStr += char;
           
-          const parsed = JSON.parse(cleanJson);
-          if (parsed.type === 'tool_use' && parsed.name && parsed.input) {
-            console.log(`✅ DEBUG: Extracted tool_use from text: ${parsed.name}`);
-            this.logger.log(`Tool use detected: ${parsed.name} with input ${JSON.stringify(parsed.input)}`);
-            return {
-              isToolUse: true,
-              toolName: parsed.name,
-              toolInput: parsed.input,
-            };
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
           }
-        } catch (e) {
-          // Failed to parse extracted JSON
-          console.log(`❌ DEBUG: Failed to parse extracted JSON: ${e}`);
-          this.logger.warn(`Failed to parse extracted JSON: ${e}`);
+          
+          if (char === '\\') {
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') braceCount++;
+            if (char === '}') {
+              braceCount--;
+              if (braceCount === 0) {
+                // Found complete JSON object
+                console.log(`🔍 DEBUG: Found complete JSON (${jsonStr.length} chars)`);
+                console.log(`🔍 DEBUG: JSON preview: ${JSON.stringify(jsonStr.substring(0, 200))}`);
+                
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  if (parsed.type === 'tool_use' && parsed.name && parsed.input) {
+                    console.log(`✅ DEBUG: Extracted tool_use from text: ${parsed.name}`);
+                    this.logger.log(`Tool use detected: ${parsed.name} with input ${JSON.stringify(parsed.input)}`);
+                    return {
+                      isToolUse: true,
+                      toolName: parsed.name,
+                      toolInput: parsed.input,
+                    };
+                  }
+                } catch (e) {
+                  console.log(`❌ DEBUG: Failed to parse extracted JSON: ${e}`);
+                  this.logger.warn(`Failed to parse extracted JSON: ${e}`);
+                }
+                break;
+              }
+            }
+          }
         }
       }
     }
