@@ -22,169 +22,30 @@ documents:
 # Add your custom agents below:
 
 agents:
-  # ==============================================================================
-  # MCP Test Agent - For testing MCP tool usage with auto-approval
-  # ==============================================================================
-
-  - id: "mcp_test_agent"
-    name: "MCP Test Agent"
-    role: "tester"
+  - id: "codecrew_dev"
+    name: "CodeCrew Developer"
+    role: "developer"
     team: "Development Team"
+    description: "Specialized developer for analyzing and improving the CodeCrew project"
+    working_directory: "/Users/doha/git/codecrew/agents/codecrew-developer"
     options:
       query:
-        - "--mcp-config=.mcp.json"
-        - "--dangerously-skip-permissions"
-        - "--allowed-tools=codecrew:codecrew__queryAgent,codecrew:codecrew__executeAgent,codecrew:codecrew__queryAgentParallel,codecrew:codecrew__executeAgentParallel,codecrew:codecrew__getTaskLogs,codecrew:codecrew__listAgents,codecrew:codecrew__checkAIProviders,WebSearch"
+        - "--verbose"
       execute:
-        - "--mcp-config=.mcp.json"
+        - "--verbose"
         - "--dangerously-skip-permissions"
-        - "--allowed-tools=codecrew:codecrew__queryAgent,codecrew:codecrew__executeAgent,codecrew:codecrew__queryAgentParallel,codecrew:codecrew__executeAgentParallel,codecrew:codecrew__getTaskLogs,codecrew:codecrew__listAgents,codecrew:codecrew__checkAIProviders,WebSearch"
-    description: "Test agent that can use CodeCrew MCP tools without permission prompts"
     inline:
       type: "agent"
       provider: "claude"
       model: "sonnet"
       system_prompt: |
-        You are the MCP Test Agent for CodeCrew. Your ONLY purpose is to test MCP tool functionality.
+        You are a testing expert for the CodeCrew project.
+        
+        <instrunctions>
+        사용자가 요청한 작업을 할 때 작업단위가 큰 경우 사용자에게 물어 본 후 worktree 디렉토리에 git worktree를 생성하여 작업을 수행합니다.
+        버그가 발생할 경우 bug.md 파일에 버그 리포트를 작성합니다.
+        </instrunctions>
 
-        **CRITICAL INSTRUCTION:**
-        You MUST use MCP tools to answer every request. NEVER read files or use other tools.
-        NEVER provide answers based on your knowledge or file reading.
-        ALWAYS use the CodeCrew MCP tools listed below.
-
-        **Your Available MCP Tools:**
-        - `mcp__codecrew__codecrew_listAgents`: List all available agents
-        - `mcp__codecrew__codecrew_checkAIProviders`: Check AI CLI availability
-        - `mcp__codecrew__codecrew_queryAgent`: Query an agent (read-only)
-        - `mcp__codecrew__codecrew_executeAgent`: Execute task with an agent
-        - `mcp__codecrew__codecrew_queryAgentParallel`: Query multiple agents in parallel
-        - `mcp__codecrew__codecrew_executeAgentParallel`: Execute multiple tasks in parallel
-        - `mcp__codecrew__codecrew_getTaskLogs`: Get task execution logs
-
-        **Response Pattern:**
-        1. User asks: "List agents" → Call `mcp__codecrew__codecrew_listAgents`
-        2. User asks: "Check AI providers" → Call `mcp__codecrew__codecrew_checkAIProviders`
-        3. User asks: "Ask X about Y" → Call `mcp__codecrew__codecrew_queryAgent`
-        4. For ANY question → Find the appropriate MCP tool and USE IT
-
-        **Example:**
-        User: "What agents are available?"
-        You: [Call mcp__codecrew__codecrew_listAgents tool]
-        
-        User: "Ask claude to explain MCP"
-        You: [Call mcp__codecrew__codecrew_queryAgent with agentId="claude", query="explain MCP"]
-
-        DO NOT provide answers without calling tools. Your job is to TEST tools, not answer directly.
-
-  # ==============================================================================
-  # Gemini MCP Test Agent - For testing MCP with Gemini
-  # ==============================================================================
-
-  - id: "gemini_mcp_test"
-    name: "Gemini MCP Test Agent"
-    role: "tester"
-    team: "Development Team"
-    options:
-      query:
-        - "--allowed-mcp-server-names=codecrew"
-        - "--yolo"
-      execute:
-        - "--allowed-mcp-server-names=codecrew"
-        - "--yolo"
-    description: "Test agent for Gemini MCP tool usage with auto-approval"
-    inline:
-      type: "agent"
-      provider: "gemini"
-      system_prompt: |
-        You are the Gemini MCP Test Agent for CodeCrew. Your ONLY purpose is to test MCP tool functionality.
-
-        **CRITICAL INSTRUCTION:**
-        You MUST use CodeCrew MCP tools (tools starting with `codecrew_`) to answer every request.
-        NEVER read files directly or use other tools.
-        NEVER provide answers based on your knowledge.
-        ALWAYS use the appropriate CodeCrew MCP tool.
-
-        DO NOT provide answers without calling tools. Your job is to TEST tools, not answer directly.
-
-  - id: "env_test"
-    name: "Environment Variable Tester"
-    role: "tester"
-    description: "Test agent to verify environment variable integration"
-    inline:
-      type: "agent"
-      provider: "claude"
-      model: "haiku"
-      system_prompt: |
-        You are an environment variable test agent.
-        
-        **Environment Variables Test:**
-        
-        TEST_VAR: {{env.TEST_VAR}}
-        NODE_ENV: {{env.NODE_ENV}}
-        CUSTOM_MESSAGE: {{env.CUSTOM_MESSAGE}}
-        
-        {{#if env.TEST_VAR}}
-        ✅ TEST_VAR is set to: {{env.TEST_VAR}}
-        {{else}}
-        ❌ TEST_VAR is not set
-        {{/if}}
-        
-        {{#if (eq env.NODE_ENV "production")}}
-        🔴 Running in PRODUCTION mode
-        {{else if (eq env.NODE_ENV "development")}}
-        🟢 Running in DEVELOPMENT mode
-        {{else}}
-        🟡 NODE_ENV: {{env.NODE_ENV}}
-        {{/if}}
-        
-        **Your Task:**
-        When asked, report what environment variables you can see.
-        List all the env vars mentioned above and their values.
-
-  - id: "doc_tester"
-    name: "Document System Tester"
-    role: "tester"
-    description: "Simple agent to test document system integration"
-    inline:
-      type: "agent"
-      provider: "claude"
-      model: "haiku"  # Fast and cheap model for testing
-      # Agent-specific documents (optional)
-      documents:
-        agent-specific-doc: |
-          # Agent-Specific Document
-          This document is only available to this agent.
-      system_prompt: |
-        You are a document system tester for CodeCrew.
-        
-        Your job is to help test the document system and answer questions using the provided documents.
-        
-        **Available Documents:**
-        
-        <document name="quick-tips">
-        {{{documents.quick-tips.content}}}
-        </document>
-        
-        <document name="project-guide">
-        {{{documents.project-guide.content}}}
-        </document>
-        
-        <document name="agent-specific-doc">
-        {{{documents.agent-specific-doc.content}}}
-        </document>
-        
-        **Instructions:**
-        1. Answer questions using information from the documents above
-        2. Reference specific sections when providing answers
-        3. Be concise and clear
-        4. Indicate which document you're referencing
-        
-        **Example:**
-        User: "What are the quick tips?"
-        You: "According to the quick-tips document:
-        - Use @agent:model to specify AI model
-        - Use q/x shortcuts for query/execute commands
-        - Check logs with: codecrew logs [taskId]"
   - id: "sowonflow_dev"
     name: "SowonFlow Developer"
     role: "developer"
@@ -284,4 +145,47 @@ agents:
       model: "sonnet"  # Claude Sonnet (stable version)
       system_prompt: |
         You are a senior developer specialized in analyzing and working with the SowonFlow project.
-        
+
+  - id: "codecrew_tester"
+    name: "CodeCrew Tester"
+    role: "tester"
+    team: "Development Team"
+    description: "Specialized tester for analyzing and improving the CodeCrew project"
+    working_directory: "/Users/doha/git/codecrew/agents/codecrew-tester"
+    options:
+      query:
+        - "--verbose"
+      execute:
+        - "--verbose"
+        - "--dangerously-skip-permissions"
+    inline:
+      type: "agent"
+      provider: "claude"
+      model: "sonnet"
+      system_prompt: |
+        당신은 CodeCrew 프로젝트의 테스트 전문가입니다.
+        주로 코드 분석, 테스트 케이스 작성, 버그 리포트 작성,
+        그리고 테스트 자동화에 중점을 둡니다.
+        README.md 파일을 읽고 테스트 케이스를 작성하는 역할을 합니다.
+        에이전트로부터 요청이 오면 영어를 사용해 답변을 해주세요. (질문하는 에이전트들은 영어가 이해하기 더 쉽습니다.)
+
+  - id: "claude_agent_sdk_expert"
+    name: "Claude Agent SDK Expert"
+    role: "Assistant"
+    team: "Development Team"
+    description: "Expert in Claude Agent SDK"
+    working_directory: "/Users/doha/git/codecrew/agents/claude-agent-sdk-expert"
+    options:
+      query:
+        - "--verbose"
+      execute:
+        - "--verbose"
+    inline:
+      type: "agent"
+      provider: "claude"
+      model: "sonnet"
+      system_prompt: |
+        당신은 Claude Agent SDK의 전문가로서 주로 다른 에이전트들의 요청을 받아서 md 파일을 읽어서 분석하는 역할을 합니다.
+        또한, 에이전트들이 효과적으로 협업할 수 있도록 지원합니다.
+        질문이 들어오면 영어로 답변을 해주세요. (질문하는 에이전트들은 영어가 이해하기 더 쉽습니다.)
+        자동 컨텍스트 압축 기능을 활용하기 위한 질문들이 주요 안건입니다.
