@@ -419,7 +419,159 @@ export class ToolCallService {
       }
     );
 
-    this.logger.log('Built-in tools registered: hello, read_file, list_agents, get_markdown_headings');
+    // Get markdown sections tool
+    this.register(
+      {
+        name: 'get_markdown_sections',
+        description: 'Extract specific sections from a markdown file by heading names. Use this after get_markdown_headings to selectively read only the sections you need.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'The path to the markdown file',
+            },
+            headings: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of heading texts to extract sections for',
+            },
+          },
+          required: ['path', 'headings'],
+        },
+        output_schema: {
+          type: 'object',
+          properties: {
+            sections: {
+              type: 'array',
+              description: 'Array of extracted sections',
+              items: {
+                type: 'object',
+                properties: {
+                  heading: { type: 'string', description: 'Requested heading text' },
+                  content: { type: 'string', description: 'Section content' },
+                  found: { type: 'boolean', description: 'Whether the section was found' },
+                },
+              },
+            },
+            totalSize: {
+              type: 'number',
+              description: 'Total size of extracted content in bytes',
+            },
+            notFound: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Headings that were not found',
+            },
+          },
+          required: ['sections', 'totalSize', 'notFound'],
+        },
+      },
+      {
+        execute: async (context: ToolExecutionContext): Promise<ToolExecutionResult> => {
+          const startTime = Date.now();
+          try {
+            const { path, headings } = context.input;
+
+            if (!path || typeof path !== 'string') {
+              return {
+                success: false,
+                error: 'Invalid input: path is required and must be a string',
+                metadata: {
+                  executionTime: Date.now() - startTime,
+                  toolName: 'get_markdown_sections',
+                  runId: context.runId,
+                },
+              };
+            }
+
+            if (!Array.isArray(headings) || headings.length === 0) {
+              return {
+                success: false,
+                error: 'Invalid input: headings is required and must be a non-empty array',
+                metadata: {
+                  executionTime: Date.now() - startTime,
+                  toolName: 'get_markdown_sections',
+                  runId: context.runId,
+                },
+              };
+            }
+
+            // Read file content
+            const content = readFileSync(path, 'utf-8');
+
+            // Extract each requested section
+            const sections: Array<{ heading: string; content: string; found: boolean }> = [];
+            const notFound: string[] = [];
+            let totalSize = 0;
+
+            for (const heading of headings) {
+              if (typeof heading !== 'string') {
+                sections.push({
+                  heading: String(heading),
+                  content: '',
+                  found: false,
+                });
+                notFound.push(String(heading));
+                continue;
+              }
+
+              try {
+                const sectionContent = await DocumentManager.selectSection(content, heading);
+                if (sectionContent) {
+                  sections.push({
+                    heading,
+                    content: sectionContent,
+                    found: true,
+                  });
+                  totalSize += sectionContent.length;
+                } else {
+                  sections.push({
+                    heading,
+                    content: '',
+                    found: false,
+                  });
+                  notFound.push(heading);
+                }
+              } catch (error) {
+                sections.push({
+                  heading,
+                  content: '',
+                  found: false,
+                });
+                notFound.push(heading);
+              }
+            }
+
+            return {
+              success: true,
+              data: {
+                sections,
+                totalSize,
+                notFound,
+              },
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'get_markdown_sections',
+                runId: context.runId,
+              },
+            };
+          } catch (error: any) {
+            return {
+              success: false,
+              error: `Failed to extract markdown sections: ${error.message}`,
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'get_markdown_sections',
+                runId: context.runId,
+              },
+            };
+          }
+        },
+      }
+    );
+
+    this.logger.log('Built-in tools registered: hello, read_file, list_agents, get_markdown_headings, get_markdown_sections');
   }
 
   /**
