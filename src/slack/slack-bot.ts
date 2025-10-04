@@ -177,8 +177,9 @@ export class SlackBot {
         this.logger.log(`📦 Received result from CodeCrew MCP`);
 
         // Extract actual AI response from MCP result
-        // Use the 'response' field which contains the clean AI response
-        const responseText = (result as any).response || 
+        // Use 'implementation' field which contains only the AI's actual response (no metadata)
+        // Fallback order: implementation > content[0].text (for compatibility)
+        const responseText = (result as any).implementation || 
           (result.content && result.content[0] ? result.content[0].text : 'No response');
 
         const blocks = this.formatter.formatExecutionResult({
@@ -192,9 +193,17 @@ export class SlackBot {
 
         // Send result as thread reply
         await say({
-          text: '✅ Completed!',
+          text: `✅ Completed! (@${(result as any).agent || this.defaultAgent})`,
           blocks: blocks,
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'agent_response',
+            event_payload: {
+              agent_id: (result as any).agent || this.defaultAgent,
+              provider: (result as any).provider || this.defaultAgent,
+              task_id: (result as any).taskId || 'unknown',
+            },
+          },
         });
 
         // Remove "processing" reaction and add "completed" reaction
