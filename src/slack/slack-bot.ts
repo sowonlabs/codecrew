@@ -166,11 +166,11 @@ export class SlackBot {
           }
         }
 
-        // Use configured default agent for natural conversation
-        // (mcp_test_agent is only for testing MCP tools, not for chat)
-        const result = await this.codeCrewTool.queryAgent({
+        // Use configured default agent with executeAgent for full capabilities
+        // (executeAgent supports file modifications, queryAgent is read-only)
+        const result = await this.codeCrewTool.executeAgent({
           agentId: this.defaultAgent,
-          query: userRequest,
+          task: userRequest,
           context: contextText || undefined, // Only pass context if we have thread history
         });
 

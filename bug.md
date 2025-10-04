@@ -12,7 +12,7 @@
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:6, Created:4, Resolved:2)
+## bugs (Total:7, Created:5, Resolved:2)
 ### 병렬처리 버그
 ID: bug-00000000
 우선순위: 긴급
@@ -213,4 +213,139 @@ ls -la .codecrew/conversations/
 - Thread ID sanitization 문제 확인
 
 참고문서: reports/report-20251004_161452.md (검증 테스트 리포트)
+---
+
+### MCP 에이전트 파일 수정 도구 부재 (설계 개선)
+ID: bug-00000006
+우선순위: 긴급
+버전: 0.3.5
+상태: resolved
+작성자: GitHub Copilot
+작업자: dohapark
+생성일: 2025-10-04 16:45:00
+수정일: 2025-10-04 17:30:00
+현상:
+Slack Bot에서 에이전트가 파일을 수정할 수 없음.
+CLI에서는 `execute` 명령어로 파일 수정이 가능하지만, Slack에서는 불가능함.
+
+테스트 비교:
+```bash
+# CLI 모드 (정상 작동)
+node dist/main.js execute "@codecrew_dev" "Create test.txt"
+# ✅ 성공: codecrew_dev가 Claude CLI로 spawn되어 Write 도구 사용
+
+# Slack 모드 (파일 수정 불가)
+@codecrew Create test.txt
+# ❌ 실패: codecrew_dev가 queryAgent로 실행되어 read-only
+```
+
+환경: 
+- macOS / CodeCrew v0.3.5 / Slack Bot 모드
+- Slack Bot → queryAgent (read-only)
+- CLI → executeAgent (can modify files)
+
+원인 (코드 분석 완료):
+**Slack Bot이 항상 `queryAgent`를 사용하여 read-only 모드로 실행:**
+
+```typescript
+// src/slack/slack-bot.ts Line 170
+const result = await this.codeCrewTool.queryAgent({
+  agentId: this.defaultAgent,
+  query: userRequest,
+  context: contextText || undefined,
+});
+```
+
+- `queryAgent`: Read-only mode (파일 수정 불가)
+- `executeAgent`: Implementation mode (파일 수정 가능)
+
+**CLI와의 차이:**
+```typescript
+// CLI execute command
+node dist/main.js execute "@agent" "task"
+→ cli/execute.handler.ts
+→ codecrew.tool.ts executeAgent()
+→ Claude CLI spawn with Write tools ✅
+
+// Slack Bot
+Slack message "@agent task"
+→ slack-bot.ts handleCommand()
+→ codecrew.tool.ts queryAgent() ❌
+→ Claude CLI spawn with read-only
+```
+
+증거:
+1. **Slack Bot 코드** (src/slack/slack-bot.ts:170):
+   ```typescript
+   const result = await this.codeCrewTool.queryAgent({
+     agentId: this.defaultAgent, // codecrew_dev
+     query: userRequest,
+   });
+   ```
+
+2. **queryAgent vs executeAgent 차이** (src/codecrew.tool.ts):
+   - queryAgent: "read-only mode. No file modifications"
+   - executeAgent: "Can provide implementation guidance, code examples, and actionable solutions"
+
+3. **MCP 테스트 성공** (task_1759563588319_ad43hpw3o):
+   - `executeAgent`를 통해 파일 생성 ✅
+   - Write 도구 사용 가능 확인
+
+해결책:
+**Slack Bot이 executeAgent를 사용하도록 변경:**
+
+```typescript
+// src/slack/slack-bot.ts Line 170
+// Before:
+const result = await this.codeCrewTool.queryAgent({
+  agentId: this.defaultAgent,
+  query: userRequest,
+  context: contextText || undefined,
+});
+
+// After:
+const result = await this.codeCrewTool.executeAgent({
+  agentId: this.defaultAgent,
+  task: userRequest,
+  context: contextText || undefined,
+});
+```
+
+**주의사항:**
+- executeAgent는 파일 수정이 가능하므로 보안 위험 증가
+- Slack workspace 멤버만 접근 가능하도록 권한 확인 필요
+- 또는 사용자가 명시적으로 요청할 때만 executeAgent 사용:
+  ```typescript
+  if (userRequest.includes('create') || userRequest.includes('modify')) {
+    // Use executeAgent
+  } else {
+    // Use queryAgent
+  }
+  ```
+
+영향도:
+- 기능: Slack에서 파일 수정 불가능 (심각)
+- CLI: 정상 작동 (executeAgent 사용)
+- 보안: executeAgent 사용 시 권한 검토 필요
+
+우선순위: 긴급
+- Slack Bot의 핵심 기능인 코드 수정이 불가능
+- CLI와 Slack의 동작이 다름 (일관성 문제)
+- 사용자 기대와 실제 동작 불일치
+
+수정 파일:
+- src/slack/slack-bot.ts (Line 170)
+
+검증 방법:
+```bash
+# Slack Bot 테스트
+1. Slack에서 "@codecrew Create test.txt with content 'hello'"
+2. 파일 생성 확인: ls test.txt
+3. 성공: 파일 생성됨 ✅
+```
+
+참고:
+- Task Log: task_1759563588319_ad43hpw3o (executeAgent 테스트 성공)
+- Slack Bot 코드: src/slack/slack-bot.ts
+- MCP Tool: src/codecrew.tool.ts (queryAgent vs executeAgent)
 ---
