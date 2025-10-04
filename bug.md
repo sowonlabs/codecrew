@@ -14,7 +14,7 @@ resolved 상태에서는 삭제를 하면 안되고 사람인 유저 개발자�
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:12, Created:6, Resolved:4, Closed:2)
+## bugs (Total:13, Created:7, Resolved:4, Closed:2)
 ### 병렬처리 버그 (예시 - 버그 작성 포맷 템플릿)
 ID: bug-00000000
 우선순위: 긴급
@@ -558,11 +558,11 @@ agents:
 ID: bug-00000008
 우선순위: 높음
 버전: 0.3.5
-상태: created
+상태: resolved
 작성자: dohapark
-작업자: -
+작업자: dohapark
 생성일: 2025-10-04
-수정일: -
+수정일: 2025-10-04 22:00:00
 현상:
 Slack Bot 응답이 2000자를 초과하면 `invalid_blocks` 에러가 발생하며 사용자에게 에러 메시지만 표시됨.
 환경:
@@ -571,6 +571,13 @@ macOS / Slack Bot / CodeCrew v0.3.5
 Slack Block Kit의 텍스트 블록 길이 제한(3000자)을 초과하거나, 전체 메시지 구조가 Slack API 제한을 위반함.
 해결책:
 긴 응답을 여러 메시지로 분할하거나, 파일 업로드 방식으로 전환 필요.
+
+검증:
+src/slack/formatters/message.formatter.ts 파일의 formatExecutionResult 메서드 (line 31-90)에서 큰 응답 분할 로직이 이미 구현되어 있음을 확인:
+1. 2900자 초과 시 자동 분할 (line 39-56)
+2. 50개 블록 제한 검증 (line 155-165)
+3. 마크다운 보존 (line 171-213)
+
 참고문서: -
 ---
 
@@ -678,11 +685,11 @@ Slack Bot에서 'implementation' 필드 우선 사용하도록 수정.
 ID: bug-00000010
 우선순위: 긴급
 버전: 0.3.7
-상태: created
+상태: resolved
 작성자: dohapark
-작업자: -
+작업자: dohapark
 생성일: 2025-10-04 20:42:00
-수정일: -
+수정일: 2025-10-04 21:50:00
 현상:
 Slack Bot의 대화 히스토리에서 Assistant의 실제 답변 내용이 누락되고 "✅ Completed!" 메시지만 표시됨.
 AI가 이전 대화를 참조할 때 내용을 알 수 없음.
@@ -763,7 +770,16 @@ const messages = result.messages.map((msg: any) => ({
 - src/conversation/slack-conversation-history.provider.ts (Line 77)
 - src/slack/slack-bot.ts (메시지 전송 시 blocks 사용)
 
-참고 로그: .codecrew/logs/task_1759578041374_044cus1no.log
+참고 로그: 
+- .codecrew/logs/task_1759578041374_044cus1no.log (초기 발견)
+- .codecrew/logs/task_1759581760245_uir9xqf6o.log (사용자 테스트 재현, 2025-10-04 21:42)
+
+테스트 재현 (2025-10-04 21:42):
+```
+실제 첫 응답: "Hi! I'm ready to help you with the CodeCrew project..."
+히스토리 기록: ":white_check_mark: Completed! (@codecrew_dev)"
+→ 실제 답변 내용이 완전히 누락되어 "Completed!" 메시지만 저장됨
+```
 
 참고문서: -
 ---
@@ -1070,4 +1086,91 @@ private async sendLargeResponse(
 - [ ] 코드 블록 및 마크다운 정상 렌더링
 - [ ] 기존 짧은 응답 동작 유지
 - [ ] 에러 응답 로직 정상 작동
+---
+
+### Slack 스레드에 멘션하지 않은 외부 에이전트가 응답
+ID: bug-00000012
+우선순위: 긴급
+버전: 0.3.7
+상태: analyzed
+작성자: dohapark
+작업자: codecrew_dev
+생성일: 2025-10-04 21:54:00
+수정일: 2025-10-04 21:56:00
+현상:
+Slack 스레드에서 @CodeCrew (codecrew_dev)에게만 멘션했는데, 멘션하지 않은 CSO 에이전트가 응답함.
+CSO는 다른 서버에 띄워놓은 별도의 CodeCrew 인스턴스 에이전트.
+
+**재현 시나리오:**
+```
+1. User: "@CodeCrew 첫번째 응답이 뭐였는지 알려줘 (테스트 중)"
+2. CodeCrew (codecrew_dev): 정상 응답
+3. User: "codecrew_dev가 누구야?" (멘션 없음, 스레드 내 일반 메시지)
+4. CodeCrew (codecrew_dev): 정상 응답
+5. CSO: "⚡ Agent Execution Response..." 응답 (문제!)
+```
+
+**문제점:**
+- CSO 에이전트는 스레드에 참여하지 않았음
+- @CSO 멘션도 하지 않았음
+- 다른 서버의 CodeCrew 인스턴스가 같은 스레드를 모니터링하고 응답
+
+환경: macOS / Slack Bot / CodeCrew v0.3.7 / Multi-instance
+
+원인 (추정):
+1. **Slack Event 구독 중복**: 여러 CodeCrew 인스턴스가 동일한 workspace의 message 이벤트를 구독
+2. **스레드 필터링 부재**: 각 인스턴스가 자신이 참여한 스레드만 처리하는 로직 없음
+3. **Bot ID 구분 부재**: 멘션된 bot과 응답하는 bot의 ID 검증 누락
+4. **Event 중복 처리**: Slack Events API에서 동일 이벤트를 여러 앱이 수신
+
+해결책 (제안):
+**Option 1: Bot 멘션 검증** (권장)
+```typescript
+// src/slack/slack-bot.ts
+// message 이벤트 처리 시 자신의 bot ID가 멘션되었는지 확인
+if (event.text && !event.text.includes(`<@${this.botUserId}>`)) {
+  // 멘션되지 않았으면 무시 (스레드 일반 메시지)
+  return;
+}
+```
+
+**Option 2: 스레드 참여 여부 확인**
+```typescript
+// 스레드에 자신이 이미 참여했는지 확인
+if (event.thread_ts) {
+  const threadHistory = await client.conversations.replies({
+    channel: event.channel,
+    ts: event.thread_ts,
+  });
+  
+  const hasParticipated = threadHistory.messages.some(
+    msg => msg.bot_id === this.botUserId
+  );
+  
+  if (!hasParticipated && !event.text.includes(`<@${this.botUserId}>`)) {
+    // 참여하지 않은 스레드이고 멘션도 없으면 무시
+    return;
+  }
+}
+```
+
+**Option 3: Slack App 설정**
+- 각 CodeCrew 인스턴스를 별도의 Slack App으로 분리
+- 또는 workspace 단위 분리
+
+영향도:
+- 사용자 혼란: 심각 (예상치 못한 에이전트가 응답)
+- 보안: 중간 (다른 인스턴스가 대화 내용 접근)
+- 멀티 인스턴스 운영: 불가능 (충돌 발생)
+
+우선순위: 긴급
+- Multi-instance 환경에서 치명적
+- 사용자가 의도하지 않은 에이전트 응답
+- 대화 흐름 방해
+
+관련 파일:
+- src/slack/slack-bot.ts (message 이벤트 핸들러)
+- src/slack/slack-bot.ts (멘션 파싱 로직)
+
+참고문서: -
 ---
