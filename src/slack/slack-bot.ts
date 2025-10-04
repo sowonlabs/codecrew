@@ -112,6 +112,14 @@ export class SlackBot {
         await say({
           text: '❌ Please provide a request. Example: `@codecrew analyze this code`',
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'codecrew_response',
+            event_payload: {
+              agent_id: this.defaultAgent,
+              provider: this.defaultAgent,
+              task_id: 'validation_error',
+            },
+          },
         });
         return;
       }
@@ -197,7 +205,7 @@ export class SlackBot {
           blocks: blocks,
           thread_ts: message.ts,
           metadata: {
-            event_type: 'agent_response',
+            event_type: 'codecrew_response',
             event_payload: {
               agent_id: (result as any).agent || this.defaultAgent,
               provider: (result as any).provider || this.defaultAgent,
@@ -228,6 +236,14 @@ export class SlackBot {
         await say({
           text: `❌ Error: ${error.message}`,
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'codecrew_response',
+            event_payload: {
+              agent_id: this.defaultAgent,
+              provider: this.defaultAgent,
+              task_id: 'execution_error',
+            },
+          },
         });
 
         // Remove "processing" reaction and add "error" reaction
@@ -251,6 +267,14 @@ export class SlackBot {
       await say({
         text: `❌ Internal error: ${error.message}`,
         thread_ts: (message as any).ts,
+        metadata: {
+          event_type: 'codecrew_response',
+          event_payload: {
+            agent_id: this.defaultAgent,
+            provider: this.defaultAgent,
+            task_id: 'internal_error',
+          },
+        },
       });
     }
   }
