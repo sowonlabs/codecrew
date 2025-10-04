@@ -12,7 +12,7 @@
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:7, Created:4, Resolved:2, Closed:1)
+## bugs (Total:7, Created:3, Resolved:3, Closed:1)
 ### 병렬처리 버그
 ID: bug-00000000
 우선순위: 긴급
@@ -160,11 +160,11 @@ node dist/main.js query "@claude:haiku 이전 메시지에서 내가 뭐라고 �
 ID: bug-00000005
 우선순위: 긴급
 버전: 0.3.5
-상태: created
+상태: resolved
 작성자: codecrew_tester
-작업자: -
+작업자: dohapark
 생성일: 2025-10-04 16:14:52
-수정일: -
+수정일: 2025-10-04 17:58:00
 현상:
 Thread 대화가 세션 중에는 정상 작동하지만 `.codecrew/conversations/` 디렉토리에 파일이 저장되지 않음.
 대화 컨텍스트는 메모리에서만 유지되고 디스크에 영구 저장되지 않아 CLI 재시작 시 대화 내용이 손실됨.
@@ -207,12 +207,15 @@ ls -la .codecrew/conversations/
 - 데이터 손실: CLI 재시작 시 대화 내용 손실
 - 장기 Thread 대화: 지속성 없음
 
-검증 필요:
-- ConversationStorageService.addMessage() 메소드 동작 확인
-- 파일 시스템 권한 문제 여부 확인
-- Thread ID sanitization 문제 확인
+검증 결과:
+✅ **버그 재현 불가 - 정상 작동 확인**
+- Thread 대화 파일이 `.codecrew/conversations/` 디렉토리에 정상적으로 저장됨
+- 파일 구조 및 메타데이터 정확하게 기록됨
+- bug-00000004 수정 과정에서 함께 해결된 것으로 추정
 
-참고문서: reports/report-20251004_161452.md (검증 테스트 리포트)
+참고문서: 
+- reports/report-20251004_161452.md (초기 발견 리포트)
+- reports/report-20251004_164138.md (검증 테스트 - 버그 재현 불가)
 ---
 
 ### MCP 에이전트 파일 수정 도구 부재 (설계 개선)
