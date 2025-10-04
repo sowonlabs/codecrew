@@ -12,7 +12,7 @@
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:4, Created:3, Resolved:1)
+## bugs (Total:6, Created:4, Resolved:2)
 ### 병렬처리 버그
 ID: bug-00000000
 우선순위: 긴급
@@ -101,3 +101,116 @@ ID: bug-00000001
 환경: 맥os / 윈도우
 원인: 이 버그 원인을 파악하고 원인을 적어주세요.
 해결책: 해결책을 적어주세요.
+---
+
+### Thread 대화 연속성 버그 (Conversation Context Not Preserved)
+ID: bug-00000004
+우선순위: 긴급
+버전: 0.3.5
+상태: resolved
+작성자: codecrew_tester
+작업자: dohapark
+생성일: 2025-10-04 15:56:32
+수정일: 2025-10-04 16:08:00
+현상:
+`--thread` 옵션을 사용한 대화에서 이전 메시지의 컨텍스트가 보존되지 않음.
+스레드는 생성되고 파일도 저장되지만, 다음 쿼리에서 이전 대화 내용을 기억하지 못함.
+
+테스트 케이스:
+```bash
+# 첫 번째 메시지
+node dist/main.js query "@claude:haiku test" --thread "test-thread"
+# 응답: 정상
+
+# 두 번째 메시지 (이전 내용 기억해야 함)
+node dist/main.js query "@claude:haiku 이전 메시지에서 내가 뭐라고 물어봤지?" --thread "test-thread"
+# 응답: "I do not see a previous message in the context"
+```
+
+환경: macOS / CodeCrew v0.3.5 / CLI 모드
+원인:
+1. ✅ `excludeCurrent: true` 파라미터 문제 - 히스토리 로드 시 마지막 Assistant 메시지가 제외됨
+2. ✅ 컨텍스트 포맷팅 문제 - `<Context>` 태그 형식이 AI가 대화 히스토리로 인식하지 못함
+
+해결책:
+1. ✅ query.handler.ts 73라인: `excludeCurrent: false` 로 변경 - 히스토리 fetch 시점에서는 새 메시지가 아직 추가되지 않았으므로 모든 메시지를 포함해야 함
+2. ✅ codecrew.tool.ts 446-455라인: 컨텍스트 포맷팅 개선 - `## Previous Conversation:` 형식으로 변경하여 AI가 대화 히스토리로 명확히 인식하도록 함
+
+수정 파일:
+- src/cli/query.handler.ts (L73-76)
+- src/codecrew.tool.ts (L446-455)
+
+검증:
+```bash
+# 테스트 1: 이름 기억
+node dist/main.js query "@claude:haiku My favorite programming language is Python" --thread "verify-fix"
+node dist/main.js query "@claude:haiku What is my favorite programming language?" --thread "verify-fix"
+# ✅ 응답: "According to our previous conversation, your favorite programming language is Python."
+
+# 테스트 2: 원본 버그 시나리오
+node dist/main.js query "@claude:haiku test" --thread "bug-reproduce"
+node dist/main.js query "@claude:haiku 이전 메시지에서 내가 뭐라고 물어봤지?" --thread "bug-reproduce"
+# ✅ 응답: "이전 메시지에서 'test'라는 테스트 메시지를 보내셨지만..."
+```
+
+참고문서: report-20251004_155632.md (테스터 리포트)
+---
+
+### Thread 대화 파일 저장 안됨 (Thread Conversation Files Not Being Saved)
+ID: bug-00000005
+우선순위: 긴급
+버전: 0.3.5
+상태: created
+작성자: codecrew_tester
+작업자: -
+생성일: 2025-10-04 16:14:52
+수정일: -
+현상:
+Thread 대화가 세션 중에는 정상 작동하지만 `.codecrew/conversations/` 디렉토리에 파일이 저장되지 않음.
+대화 컨텍스트는 메모리에서만 유지되고 디스크에 영구 저장되지 않아 CLI 재시작 시 대화 내용이 손실됨.
+
+테스트 케이스:
+```bash
+# Thread 대화 생성
+node dist/main.js query "@claude:haiku My name is Alice" --thread "test-verification"
+node dist/main.js query "@claude:haiku What is my name?" --thread "test-verification"
+# ✅ 세션 중: 정상 작동 (Alice 기억함)
+
+# 디렉토리 확인
+ls -la .codecrew/conversations/
+# ❌ 문제: test-verification.json 파일이 생성되지 않음
+```
+
+환경: macOS / CodeCrew v0.3.5 / CLI 모드
+
+증거:
+- 디렉토리: `/Users/doha/git/codecrew/.codecrew/conversations/`
+- 최신 파일 타임스탬프: Oct 4 16:07 (테스트 실행 시각 16:12 이전)
+- 기대된 파일: `test-verification.json`, `test-korean.json`, `test-multi.json`
+- 실제 결과: 파일 생성 안됨
+
+원인 (추정):
+1. 파일 저장 메커니즘이 트리거되지 않음
+2. Thread 이름에 대한 파일 경로 생성 문제
+3. 비동기 write 작업이 완료되기 전에 종료됨
+4. ConversationStorageService의 saveThread 메소드 호출 누락
+
+해결책 (제안):
+1. conversation-storage.service.ts의 saveThread 메소드 호출 여부 확인
+2. query.handler.ts에서 addMessage 후 명시적 저장 호출 추가
+3. 비동기 작업 완료 대기 (await) 확인
+4. 파일 저장 로깅 추가하여 저장 과정 추적
+
+영향도:
+- 세션 중: 컨텍스트 정상 작동 ✅
+- 영구 저장: 파일 저장 실패 ❌
+- 데이터 손실: CLI 재시작 시 대화 내용 손실
+- 장기 Thread 대화: 지속성 없음
+
+검증 필요:
+- ConversationStorageService.addMessage() 메소드 동작 확인
+- 파일 시스템 권한 문제 여부 확인
+- Thread ID sanitization 문제 확인
+
+참고문서: report-20251004_161452.md (검증 테스트 리포트)
+---

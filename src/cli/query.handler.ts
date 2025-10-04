@@ -68,10 +68,12 @@ export async function handleQuery(app: any, args: CliOptions) {
       // For built-in agents, we'll handle conversation history via template system
       // For custom agents, use the traditional context method
       if (thread.messages.length > 0) {
+        // Don't exclude any messages - we fetch history BEFORE adding the new user message
+        // so all messages in the thread are from previous exchanges
         conversationContext = await conversationProvider.formatForAI(thread, {
-          excludeCurrent: true,
+          excludeCurrent: false,
         });
-        
+
         // Format for built-in agents with security key authentication
         if (conversationContext.trim()) {
           conversationContext = `Previous conversation context from thread "${threadId}":\n${conversationContext}`;

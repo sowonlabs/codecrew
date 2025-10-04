@@ -360,7 +360,7 @@ agents:
 
     try {
       const { agentId, query, context, model, messages } = args;
-      
+
       this.logger.log(`[${taskId}] Querying agent ${agentId}: ${query.substring(0, 50)}...`);
       this.taskManagementService.addTaskLog(taskId, { level: 'info', message: `Query: ${query.substring(0, 100)}...` });
       if (model) {
@@ -438,12 +438,16 @@ Working Directory: ${workingDir}`;
 ${query}
 </user_query>`;
 
-      const fullPrompt = `${systemPrompt}
-<Context>
-${context ? `Context: ${context}\n\n` : ''}
-</Context>
+      // Build the full prompt with proper conversation history formatting
+      let fullPrompt = systemPrompt;
 
-${wrappedQuery}`;
+      // If there's conversation context, add it as previous conversation
+      if (context) {
+        fullPrompt += `\n\n## Previous Conversation:\n${context}\n`;
+      }
+
+      // Add the current query
+      fullPrompt += `\n\n${wrappedQuery}`;
 
       // Use agent's AI provider - using queryAI wrapper
       let response;
