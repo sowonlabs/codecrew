@@ -12,7 +12,7 @@
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:7, Created:3, Resolved:3, Closed:1)
+## bugs (Total:7, Created:2, Resolved:4, Closed:1)
 ### 병렬처리 버그
 ID: bug-00000000
 우선순위: 긴급
@@ -85,11 +85,11 @@ src/slack/slack-bot.ts에서 result.success를 체크하여 실패 시 에러 �
 ID: bug-00000001
 우선순위: 긴급
 버전: 0.3.5
-상태: created
+상태: resolved
 작성자: dohapark
-작업자: -
+작업자: dohapark
 생성일: 2025-10-03 19:22:00
-수정일: -
+수정일: 2025-10-04 18:30:00
 현상:
 ```
 🔍 DEBUG: Checking if claude has queryWithTools: function
@@ -98,9 +98,34 @@ ID: bug-00000001
 ```
 위와 같은 로그가 MCP에서도 나오고 있는 상황이라서 MCP에서 파싱오류가 남.
 기타 실행할 때에도 로그가 보여서 버그라고 느껴짐
+
 환경: 맥os / 윈도우
-원인: 이 버그 원인을 파악하고 원인을 적어주세요.
-해결책: 해결책을 적어주세요.
+
+원인:
+개발 중 디버깅을 위해 추가한 `console.log` DEBUG 로그들이 프로덕션 코드에 남아있음.
+다음 파일들에 DEBUG 로그가 포함되어 있었음:
+1. src/ai-provider.service.ts (queryAI, executeAI 메서드)
+2. src/providers/claude.provider.ts (queryWithTools 메서드)
+3. src/providers/gemini.provider.ts (execute, queryWithTools 메서드)
+4. src/providers/copilot.provider.ts (execute, queryWithTools, parseToolUse 메서드)
+
+이러한 로그들이 stdout으로 출력되어 MCP에서 JSON 파싱 오류를 발생시키고,
+일반 CLI 실행 시에도 불필요한 로그가 표시되는 문제 발생.
+
+해결책:
+모든 provider 파일과 service 파일에서 `console.log` DEBUG 로그 제거.
+필요한 로그는 NestJS Logger를 통해 출력하도록 유지.
+
+수정 파일:
+- src/ai-provider.service.ts: console.log DEBUG 로그 6개 제거
+- src/providers/claude.provider.ts: console.log DEBUG 로그 3개 제거
+- src/providers/gemini.provider.ts: console.log DEBUG 로그 12개 제거
+- src/providers/copilot.provider.ts: console.log DEBUG 로그 24개 제거
+
+검증:
+✅ CLI 실행 시 DEBUG 로그 출력 없음 확인
+✅ Gemini provider 테스트 시 DEBUG 로그 출력 없음 확인
+✅ 소스 코드에서 console.log DEBUG 패턴 없음 확인
 ---
 
 ### Thread 대화 연속성 버그 (Conversation Context Not Preserved)

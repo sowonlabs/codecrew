@@ -66,16 +66,12 @@ export class AIProviderService implements OnModuleInit {
     }
 
     try {
-      console.log(`🔍 DEBUG: Checking if ${providerName} has queryWithTools: ${typeof (provider as any).queryWithTools}`);
-      
       // Use queryWithTools if available (for tool call support)
       if (typeof (provider as any).queryWithTools === 'function') {
-        console.log(`🔧 DEBUG: Using queryWithTools for ${providerName} in query mode`);
-        this.logger.log(`🔧 Using queryWithTools for ${providerName} in query mode`);
+        this.logger.log(`Using queryWithTools for ${providerName} in query mode`);
         return await (provider as any).queryWithTools(prompt, options);
       }
-      
-      console.log(`⚙️ DEBUG: Using query method for ${providerName}`);
+
       return await provider.query(prompt, options);
     } catch (error: any) {
       this.logger.error(`Error querying ${providerName}:`, error);
@@ -105,16 +101,12 @@ export class AIProviderService implements OnModuleInit {
     }
 
     try {
-      console.log(`🔍 DEBUG: Checking if ${providerName} has queryWithTools: ${typeof (provider as any).queryWithTools}`);
-      
       // Use queryWithTools if available (for Claude and Copilot)
       if (typeof (provider as any).queryWithTools === 'function') {
-        console.log(`🔧 DEBUG: Using queryWithTools for ${providerName} in execute mode`);
-        this.logger.log(`🔧 Using queryWithTools for ${providerName} in execute mode`);
+        this.logger.log(`Using queryWithTools for ${providerName} in execute mode`);
         return await (provider as any).queryWithTools(prompt, options);
       }
-      
-      console.log(`⚙️ DEBUG: Using execute method for ${providerName}`);
+
       // Fallback to execute method
       return await (provider as any).execute(prompt, options);
     } catch (error: any) {

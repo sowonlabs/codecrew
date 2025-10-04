@@ -407,9 +407,6 @@ Based on the tool execution result above, please provide a clear, detailed, and 
       // Execute query
       const response = await this.query(currentPrompt, options);
 
-      console.log(`🔧 DEBUG: Response content type: ${typeof response.content}`);
-      console.log(`🔧 DEBUG: Response content (first 500 chars): ${response.content.substring(0, 500)}`);
-
       if (!response.success) {
         return response;
       }
@@ -418,7 +415,6 @@ Based on the tool execution result above, please provide a clear, detailed, and 
       const toolUse = this.parseToolUse(response.content);
 
       this.logger.log(`Tool use check result: ${JSON.stringify(toolUse)}`);
-      console.log(`🔧 DEBUG: Tool use check - isToolUse: ${toolUse.isToolUse}, toolName: ${toolUse.toolName}`);
 
       if (!toolUse.isToolUse) {
         // No tool use detected, return the response

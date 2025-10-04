@@ -81,16 +81,11 @@ If you don't need to use a tool, respond normally.
    * Override execute to use tool call support
    */
   async execute(prompt: string, options: AIQueryOptions = {}): Promise<AIResponse> {
-    console.log(`🚀 DEBUG: GeminiProvider.execute() called`);
-    console.log(`🔧 DEBUG: toolCallService available: ${!!this.toolCallService}`);
-    
     if (this.toolCallService) {
-      console.log('🔧 DEBUG: GeminiProvider: Using queryWithTools in execute mode');
-      this.logger.log('🔧 GeminiProvider: Using queryWithTools in execute mode');
+      this.logger.log('GeminiProvider: Using queryWithTools in execute mode');
       return this.queryWithTools(prompt, options);
     }
-    console.log('⚠️ DEBUG: GeminiProvider: ToolCallService not available, falling back to base execute');
-    this.logger.warn('⚠️ GeminiProvider: ToolCallService not available, falling back to base execute');
+    this.logger.warn('GeminiProvider: ToolCallService not available, falling back to base execute');
     return super.execute(prompt, options);
   }
 
@@ -127,12 +122,7 @@ If you don't need to use a tool, respond normally.
    * Query with tool call support (multi-turn conversation)
    */
   async queryWithTools(prompt: string, options: AIQueryOptions = {}, maxTurns: number = 5): Promise<AIResponse> {
-    console.log(`🔧 DEBUG: queryWithTools() called for Gemini`);
-    console.log(`🔧 DEBUG: toolCallService: ${!!this.toolCallService}`);
-    console.log(`🔧 DEBUG: maxTurns: ${maxTurns}`);
-    
     if (!this.toolCallService) {
-      console.log(`⚠️ DEBUG: ToolCallService not available, falling back to regular query`);
       this.logger.warn('ToolCallService not available, falling back to regular query');
       return super.query(prompt, options);
     }
@@ -140,13 +130,11 @@ If you don't need to use a tool, respond normally.
     let turn = 0;
     let currentPrompt = prompt;
     const tools = this.toolCallService.list();
-    console.log(`🔧 DEBUG: Available tools: ${tools.map(t => t.name).join(', ')}`);
 
     // Add tools to the initial prompt
     currentPrompt = this.buildPromptWithTools(currentPrompt, tools);
 
     while (turn < maxTurns) {
-      console.log(`🔄 DEBUG: Tool call turn ${turn + 1}/${maxTurns}`);
       this.logger.log(`Tool call turn ${turn + 1}/${maxTurns}`);
       
       // Log to task file
@@ -158,19 +146,13 @@ If you don't need to use a tool, respond normally.
       const response = await super.query(currentPrompt, options);
 
       if (!response.success) {
-        console.log(`❌ DEBUG: Query failed: ${response.error}`);
         return response;
       }
 
-      console.log(`📝 DEBUG: Response content length: ${response.content.length}`);
-      console.log(`📝 DEBUG: Response content preview: ${response.content.substring(0, 200)}`);
-
       // Check if response contains tool use
       const toolUse = this.parseToolUse(response.content);
-      console.log(`🔍 DEBUG: parseToolUse result - isToolUse: ${toolUse.isToolUse}, toolName: ${toolUse.toolName}`);
 
       if (!toolUse.isToolUse) {
-        console.log(`✅ DEBUG: No tool use detected, returning response`);
         if (options.taskId) {
           this['appendTaskLog'](options.taskId, 'INFO', `No tool use detected, returning final response`);
         }
@@ -179,7 +161,6 @@ If you don't need to use a tool, respond normally.
       }
 
       // Execute the tool
-      console.log(`🔧 DEBUG: Executing tool: ${toolUse.toolName}`);
       this.logger.log(`Executing tool: ${toolUse.toolName!} with input ${JSON.stringify(toolUse.toolInput)}`);
       
       if (options.taskId) {
@@ -192,7 +173,6 @@ If you don't need to use a tool, respond normally.
         toolUse.toolInput,
       );
 
-      console.log(`🔧 DEBUG: Tool result: ${JSON.stringify(toolResult).substring(0, 200)}`);
       this.logger.log(`Tool result: ${JSON.stringify(toolResult)}`);
       
       if (options.taskId) {
@@ -210,7 +190,6 @@ If you don't need to use a tool, respond normally.
       turn++;
     }
 
-    console.log(`⚠️ DEBUG: Max turns reached without final response`);
     this.logger.warn('Max turns reached without final response');
     return {
       content: 'Maximum conversation turns reached without completing the task.',
