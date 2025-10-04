@@ -71,19 +71,28 @@ export class SlackConversationHistoryProvider extends BaseConversationHistoryPro
       }
 
       const messages: ConversationMessage[] = result.messages.map(
-        (msg: any) => ({
-          id: msg.ts,
-          userId: msg.bot_id ? 'assistant' : msg.user,
-          text: this.sanitizeMessage(this.extractMessageContent(msg)),
-          timestamp: new Date(parseFloat(msg.ts) * 1000),
-          isAssistant: !!msg.bot_id,
-          metadata: {
-            ts: msg.ts,
-            thread_ts: msg.thread_ts,
-            agent_id: msg.metadata?.event_payload?.agent_id,
-            provider: msg.metadata?.event_payload?.provider,
-          },
-        }),
+        (msg: any) => {
+          // agentId fallback 전략
+          const agentId =
+            msg.metadata?.event_payload?.agent_id || // 1순위: metadata
+            msg.bot_profile?.name || // 2순위: bot profile
+            msg.username || // 3순위: username
+            (msg.bot_id ? 'unknown_bot' : undefined); // 4순위: bot_id
+
+          return {
+            id: msg.ts,
+            userId: msg.bot_id ? 'assistant' : msg.user,
+            text: this.sanitizeMessage(this.extractMessageContent(msg)),
+            timestamp: new Date(parseFloat(msg.ts) * 1000),
+            isAssistant: !!msg.bot_id,
+            metadata: {
+              ts: msg.ts,
+              thread_ts: msg.thread_ts,
+              agent_id: agentId,
+              provider: msg.metadata?.event_payload?.provider || agentId,
+            },
+          };
+        },
       );
 
       const thread: ConversationThread = {
