@@ -289,7 +289,19 @@ export async function handleExecute(app: any, args: CliOptions) {
       const timeSaved = result.summary.totalDuration - Math.max(...result.results.map((r: any) => r.duration));
       console.log(`   • Time Saved: ${timeSaved}ms (vs sequential)`);
       console.log('');
-      console.log(result.success ? '✅ Execution completed successfully' : '❌ Execution failed');
+      
+      // Check if all tasks failed
+      const allFailed = result.results.every((r: any) => !r.success);
+      const hasAnySuccess = result.results.some((r: any) => r.success);
+      
+      if (allFailed) {
+        console.log('❌ All tasks failed');
+        process.exit(1);
+      } else if (hasAnySuccess) {
+        console.log('✅ Execution completed successfully');
+      } else {
+        console.log('⚠️  Execution completed with mixed results');
+      }
     }
     
   } catch (error) {

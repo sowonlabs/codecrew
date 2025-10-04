@@ -112,6 +112,14 @@ export class SlackBot {
         await say({
           text: '❌ Please provide a request. Example: `@codecrew analyze this code`',
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'codecrew_response',
+            event_payload: {
+              agent_id: this.defaultAgent,
+              provider: this.defaultAgent,
+              task_id: 'validation_error',
+            },
+          },
         });
         return;
       }
@@ -166,19 +174,20 @@ export class SlackBot {
           }
         }
 
-        // Use configured default agent for natural conversation
-        // (mcp_test_agent is only for testing MCP tools, not for chat)
-        const result = await this.codeCrewTool.queryAgent({
+        // Use configured default agent with executeAgent for full capabilities
+        // (executeAgent supports file modifications, queryAgent is read-only)
+        const result = await this.codeCrewTool.executeAgent({
           agentId: this.defaultAgent,
-          query: userRequest,
+          task: userRequest,
           context: contextText || undefined, // Only pass context if we have thread history
         });
 
         this.logger.log(`📦 Received result from CodeCrew MCP`);
 
         // Extract actual AI response from MCP result
-        // Use the 'response' field which contains the clean AI response
-        const responseText = (result as any).response || 
+        // Use 'implementation' field which contains only the AI's actual response (no metadata)
+        // Fallback order: implementation > content[0].text (for compatibility)
+        const responseText = (result as any).implementation || 
           (result.content && result.content[0] ? result.content[0].text : 'No response');
 
         const blocks = this.formatter.formatExecutionResult({
@@ -192,9 +201,17 @@ export class SlackBot {
 
         // Send result as thread reply
         await say({
-          text: '✅ Completed!',
+          text: `✅ Completed! (@${(result as any).agent || this.defaultAgent})`,
           blocks: blocks,
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'codecrew_response',
+            event_payload: {
+              agent_id: (result as any).agent || this.defaultAgent,
+              provider: (result as any).provider || this.defaultAgent,
+              task_id: (result as any).taskId || 'unknown',
+            },
+          },
         });
 
         // Remove "processing" reaction and add "completed" reaction
@@ -219,6 +236,14 @@ export class SlackBot {
         await say({
           text: `❌ Error: ${error.message}`,
           thread_ts: message.ts,
+          metadata: {
+            event_type: 'codecrew_response',
+            event_payload: {
+              agent_id: this.defaultAgent,
+              provider: this.defaultAgent,
+              task_id: 'execution_error',
+            },
+          },
         });
 
         // Remove "processing" reaction and add "error" reaction
@@ -242,6 +267,14 @@ export class SlackBot {
       await say({
         text: `❌ Internal error: ${error.message}`,
         thread_ts: (message as any).ts,
+        metadata: {
+          event_type: 'codecrew_response',
+          event_payload: {
+            agent_id: this.defaultAgent,
+            provider: this.defaultAgent,
+            task_id: 'internal_error',
+          },
+        },
       });
     }
   }

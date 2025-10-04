@@ -53,6 +53,12 @@ documents:
     type: "markdown"
     lazy: true
 
+  # Bug tracking document
+  bug:
+    path: "bug.md"
+    summary: "Bug tracking database for CodeCrew project"
+    type: "markdown"
+
 # Template Variables in agents.yaml:
 #
 # system_prompt: |

@@ -66,6 +66,12 @@ export class AIProviderService implements OnModuleInit {
     }
 
     try {
+      // Use queryWithTools if available (for tool call support)
+      if (typeof (provider as any).queryWithTools === 'function') {
+        this.logger.log(`Using queryWithTools for ${providerName} in query mode`);
+        return await (provider as any).queryWithTools(prompt, options);
+      }
+
       return await provider.query(prompt, options);
     } catch (error: any) {
       this.logger.error(`Error querying ${providerName}:`, error);
@@ -95,7 +101,13 @@ export class AIProviderService implements OnModuleInit {
     }
 
     try {
-      // All providers now have execute method from BaseAIProvider
+      // Use queryWithTools if available (for Claude and Copilot)
+      if (typeof (provider as any).queryWithTools === 'function') {
+        this.logger.log(`Using queryWithTools for ${providerName} in execute mode`);
+        return await (provider as any).queryWithTools(prompt, options);
+      }
+
+      // Fallback to execute method
       return await (provider as any).execute(prompt, options);
     } catch (error: any) {
       this.logger.error(`Error executing ${providerName}:`, error);

@@ -3,11 +3,13 @@ import { spawn, execSync } from 'child_process';
 import { writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { AIProvider, AIQueryOptions, AIResponse } from './ai-provider.interface';
+import { ToolCallService, Tool } from '../services/tool-call.service';
 
 @Injectable()
 export abstract class BaseAIProvider implements AIProvider {
   abstract readonly name: 'claude' | 'gemini' | 'copilot';
   protected readonly logger: Logger;
+  protected toolCallService?: ToolCallService;
   private readonly logsDir = join(process.cwd(), '.codecrew', 'logs');
   private cachedPath: string | null = null;
 
@@ -48,6 +50,124 @@ export abstract class BaseAIProvider implements AIProvider {
    */
   protected getPromptInArgs(): boolean {
     return false; // Default is to use stdin
+  }
+
+  /**
+   * Set ToolCallService for tool execution support
+   */
+  protected setToolCallService(toolCallService: ToolCallService): void {
+    this.toolCallService = toolCallService;
+  }
+
+  /**
+   * Parse AI response to detect tool usage
+   * Can be overridden by providers for additional parsing logic
+   */
+  protected parseToolUse(content: string): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+    // Pattern 1: CodeCrew XML tags (most reliable)
+    const xmlMatch = content.match(/<codecrew_tool_call>\s*([\s\S]*?)\s*<\/codecrew_tool_call>/);
+    if (xmlMatch && xmlMatch[1]) {
+      try {
+        const jsonContent = xmlMatch[1].trim();
+        const parsed = JSON.parse(jsonContent);
+        if (parsed.type === 'tool_use' && parsed.name && parsed.input !== undefined) {
+          this.logger.log(`Tool use detected from XML: ${parsed.name}`);
+          return {
+            isToolUse: true,
+            toolName: parsed.name,
+            toolInput: parsed.input,
+          };
+        }
+      } catch (e) {
+        // Failed to parse XML content, continue to other patterns
+      }
+    }
+
+    // Pattern 2: Direct JSON parsing
+    try {
+      const parsed = JSON.parse(content);
+      
+      // Direct tool_use object
+      if (parsed.type === 'tool_use' && parsed.name && parsed.input !== undefined) {
+        this.logger.log(`Tool use detected from direct JSON: ${parsed.name}`);
+        return {
+          isToolUse: true,
+          toolName: parsed.name,
+          toolInput: parsed.input,
+        };
+      }
+
+      // Tool use in content array
+      if (parsed.content && Array.isArray(parsed.content)) {
+        const toolUse = parsed.content.find((c: any) => c.type === 'tool_use');
+        if (toolUse && toolUse.name && toolUse.input !== undefined) {
+          this.logger.log(`Tool use detected from content array: ${toolUse.name}`);
+          return {
+            isToolUse: true,
+            toolName: toolUse.name,
+            toolInput: toolUse.input,
+          };
+        }
+      }
+      
+      // Provider-specific JSON parsing hook
+      const providerSpecific = this.parseToolUseProviderSpecific(parsed);
+      if (providerSpecific.isToolUse) {
+        return providerSpecific;
+      }
+    } catch (e) {
+      // Not valid JSON, continue to other patterns
+    }
+
+    // Pattern 3: JSON in markdown code blocks
+    const codeBlockMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      try {
+        const jsonContent = codeBlockMatch[1].trim();
+        const parsed = JSON.parse(jsonContent);
+        if (parsed.type === 'tool_use' && parsed.name && parsed.input !== undefined) {
+          this.logger.log(`Tool use detected from code block: ${parsed.name}`);
+          return {
+            isToolUse: true,
+            toolName: parsed.name,
+            toolInput: parsed.input,
+          };
+        }
+      } catch (e) {
+        // Failed to parse code block, continue
+      }
+    }
+
+    // Pattern 4: Plain JSON object in text
+    const jsonObjectPattern = /\{[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\}/;
+    const jsonMatch = content.match(jsonObjectPattern);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.type === 'tool_use' && parsed.name && parsed.input !== undefined) {
+          this.logger.log(`Tool use detected from plain text JSON: ${parsed.name}`);
+          return {
+            isToolUse: true,
+            toolName: parsed.name,
+            toolInput: parsed.input,
+          };
+        }
+      } catch (e) {
+        // Failed to parse
+      }
+    }
+
+    // No tool use detected
+    return { isToolUse: false };
+  }
+
+  /**
+   * Provider-specific tool use parsing
+   * Override this in subclasses to add provider-specific parsing logic
+   */
+  protected parseToolUseProviderSpecific(parsed: any): { isToolUse: boolean; toolName?: string; toolInput?: any } {
+    // Default: no provider-specific parsing
+    return { isToolUse: false };
   }
 
   /**
@@ -97,6 +217,30 @@ export abstract class BaseAIProvider implements AIProvider {
       this.cachedPath = '';
       return null;
     }
+  }
+
+  /**
+   * Wrap user query in authenticated security container
+   * This prevents prompt injection attacks by isolating user input
+   */
+  protected wrapUserQueryWithSecurity(userQuery: string, securityKey: string): string {
+    // Note: The actual prompt will be:
+    // System Prompt (with key) + Conversation History (with key) + User Query (with key)
+    // This method wraps only the user query portion
+    return `
+<user_query key="${securityKey}">
+${userQuery}
+</user_query>`;
+  }
+
+  /**
+   * Extract the actual user query from the wrapped version
+   * Used for logging and debugging
+   */
+  protected extractUserQuery(wrappedQuery: string, securityKey: string): string {
+    const regex = new RegExp(`<user_query key="${securityKey}">\\s*([\\s\\S]*?)\\s*</user_query>`, 'm');
+    const match = wrappedQuery.match(regex);
+    return match && match[1] ? match[1].trim() : wrappedQuery;
   }
 
   async isAvailable(): Promise<boolean> {

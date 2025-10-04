@@ -112,7 +112,12 @@ export abstract class BaseConversationHistoryProvider
       const msg = messages[i];
       if (!msg) continue;
 
-      const role = msg.isAssistant ? 'Assistant' : 'User';
+      // Include agent ID in Assistant role if available
+      const role = msg.isAssistant
+        ? msg.metadata?.agent_id
+          ? `Assistant (@${msg.metadata.agent_id})`
+          : 'Assistant'
+        : 'User';
       const formatted = `${role}: ${msg.text}`;
 
       // Check if adding this message would exceed max length

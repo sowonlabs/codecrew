@@ -15,6 +15,7 @@ import { ParallelProcessingService } from './services/parallel-processing.servic
 import { TaskManagementService } from './services/task-management.service';
 import { ResultFormatterService } from './services/result-formatter.service';
 import { ToolCallService } from './services/tool-call.service';
+import { AgentLoaderService } from './services/agent-loader.service';
 import { TemplateService } from './services/template.service';
 import { DocumentLoaderService } from './services/document-loader.service';
 import { InitHandler } from './cli/init.handler';
@@ -62,6 +63,7 @@ export class AppModule {
         IntelligentCompressionService,
         // Tool System
         ToolCallService,
+        AgentLoaderService,
         // CLI Handlers
         InitHandler,
         DoctorHandler,

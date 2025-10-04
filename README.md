@@ -256,7 +256,7 @@ echo "user auth code" | codecrew query "@claude explain this"
 
 **Available Models:**
 - **Claude**: `opus`, `sonnet`, `haiku`, `claude-sonnet-4-5`, `claude-sonnet-4-5-20250929`
-- **Gemini**: `gemini-2.5-flash` (default), `gemini-2.5-pro`
+- **Gemini**: `gemini-2.5-pro` (default), `gemini-2.5-flash`
 - **Copilot**: `gpt-5`, `claude-sonnet-4`, `claude-sonnet-4.5`
 
 **`codecrew execute`** - File Operations
@@ -326,6 +326,10 @@ codecrew slack --agent custom_agent   # Use any custom agent from agents.yaml
    SLACK_BOT_TOKEN=xoxb-...
    SLACK_APP_TOKEN=xapp-...
    SLACK_SIGNING_SECRET=...
+
+   # Optional: Adjust max response length (default: 400000 chars ≈ 100K tokens)
+   # Lower this if you experience "invalid_blocks" errors
+   SLACK_MAX_RESPONSE_LENGTH=400000
    ```
 3. Start the bot: `npm run start:slack`
 

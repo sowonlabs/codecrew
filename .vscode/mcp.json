@@ -3,7 +3,7 @@
     "codecrew": {
       "command": "node",
       "args": [
-        "${workspaceFolder}/dist/main.js",
+        "dist/main.js",
         "mcp"
       ],
       "env": {
