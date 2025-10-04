@@ -74,7 +74,7 @@ export class SlackConversationHistoryProvider extends BaseConversationHistoryPro
         (msg: any) => ({
           id: msg.ts,
           userId: msg.bot_id ? 'assistant' : msg.user,
-          text: this.sanitizeMessage(this.cleanSlackText(msg.text || '')),
+          text: this.sanitizeMessage(this.extractMessageContent(msg)),
           timestamp: new Date(parseFloat(msg.ts) * 1000),
           isAssistant: !!msg.bot_id,
           metadata: {
@@ -141,6 +141,26 @@ export class SlackConversationHistoryProvider extends BaseConversationHistoryPro
     }
 
     return `Previous conversation in this Slack thread:\n${baseContext}\n`;
+  }
+
+  /**
+   * Extract message content from Slack message
+   * Bot messages store actual content in blocks[], not in text field
+   */
+  private extractMessageContent(msg: any): string {
+    if (msg.bot_id && msg.blocks && Array.isArray(msg.blocks)) {
+      // Extract text from section blocks, excluding header blocks
+      const sections = msg.blocks
+        .filter((b: any) => b.type === 'section' && b.text?.text)
+        .map((b: any) => b.text.text);
+
+      if (sections.length > 0) {
+        return this.cleanSlackText(sections.join('\n\n'));
+      }
+    }
+
+    // Fallback: use text field for non-bot messages or if blocks are empty
+    return this.cleanSlackText(msg.text || '');
   }
 
   /**
