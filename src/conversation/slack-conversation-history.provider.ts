@@ -80,6 +80,8 @@ export class SlackConversationHistoryProvider extends BaseConversationHistoryPro
           metadata: {
             ts: msg.ts,
             thread_ts: msg.thread_ts,
+            agent_id: msg.metadata?.event_payload?.agent_id,
+            provider: msg.metadata?.event_payload?.provider,
           },
         }),
       );
