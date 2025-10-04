@@ -256,7 +256,7 @@ echo "user auth code" | codecrew query "@claude explain this"
 
 **Available Models:**
 - **Claude**: `opus`, `sonnet`, `haiku`, `claude-sonnet-4-5`, `claude-sonnet-4-5-20250929`
-- **Gemini**: `gemini-2.5-flash` (default), `gemini-2.5-pro`
+- **Gemini**: `gemini-2.5-pro` (default), `gemini-2.5-flash`
 - **Copilot**: `gpt-5`, `claude-sonnet-4`, `claude-sonnet-4.5`
 
 **`codecrew execute`** - File Operations
