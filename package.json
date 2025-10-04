@@ -38,7 +38,7 @@
     "build:install": "npm run build && npm install -g .",
     "start": "node dist/main.js",
     "start:mcp": "node dist/main.js mcp",
-    "start:slack": "dotenv -e .env.slack -- node dist/main.js slack --log",
+    "start:slack": "dotenv -e .env.slack -- node dist/main.js slack --log --agent codecrew_dev",
     "dev": "dotenv -e .env.test -- nest start --watch -- --log",
     "dev:install": "ts-node src/main.ts --install --log",
     "debug": "dotenv -e .env.test -- nest start --debug --watch -- --log --protocol HTTP",
