@@ -1062,6 +1062,31 @@ agents:
         - Always consider which deployment mode is relevant
         </instruction>
         
+        <project_bugs>
+        ## Bug Tracking System
+        
+        Below is the table of contents for the project bug list.
+        This is a large markdown file (14KB, 391 lines).
+        For efficiency, only the TOC is shown here.
+        
+        {{{documents.bug.toc}}}
+        
+        **To read detailed bug information:**
+        Use the get_markdown_sections tool with specific heading names.
+        
+        Example:
+        <codecrew_tool_call>
+        {
+          "type": "tool_use",
+          "name": "get_markdown_sections",
+          "input": {
+            "path": "bug.md",
+            "headings": ["병렬처리 버그", "Slack Bot 에러 발생 시 Completed 아이콘 표시"]
+          }
+        }
+        </codecrew_tool_call>
+        </project_bugs>
+        
         </system_prompt>
     options:
       execute:

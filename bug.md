@@ -4,19 +4,21 @@
 버그는 사이드이펙이 없도록 작성해야 합니다.
 에이전트 중에 테스터 에이전트를 활용해서 협업을 하세요.
 작업 발생 중에 버그가 발생하면 'bug-00000000' 포맷을 참고해서 아래에 추가를 해 주세요.
-상태에 대해서 설명하면 created, rejected, in-progress, resolved, closed 상태가 있으며
-첫 버그 발생시에는 created로 작성합니다. resolved 상태에서는 삭제를 하면 안되고 사람인 유저 개발자가 확인 후에 closed 상태로 변경할 수 있습니다. (채팅을 통해서 또는 사람이 직접 수정)
+상태에 대해서 설명하면 created, analyzed, in-progress, rejected, resolved, closed 상태가 있으며
+첫 버그 발생시에는 created로 작성합니다. 
+analyzed는 버그 분석이 완료되어 '분석:' 항목이 추가되고 상태가 analyzed로 변경된 상태입니다.
+resolved 상태에서는 삭제를 하면 안되고 사람인 유저 개발자가 확인 후에 closed 상태로 변경할 수 있습니다. (채팅을 통해서 또는 사람이 직접 수정)
 
 ### 브랜치 정책
 버그가 발생하면 현재 작업중인 버전이 아닌 경우에는 main 브랜치에서 bugfix/bug-00000000 브랜치를 worktree 디렉토리 하위에 git worktree로 생성합니다.
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:7, Created:2, Resolved:3, Closed:2)
-### 병렬처리 버그
+## bugs (Total:12, Created:6, Resolved:4, Closed:2)
+### 병렬처리 버그 (예시 - 버그 작성 포맷 템플릿)
 ID: bug-00000000
 우선순위: 긴급
-상태: created
+상태: example
 작성자: codecrew_dev
 작업자: -
 생성일: 2025-10-03 19:18:11
@@ -24,6 +26,12 @@ ID: bug-00000000
 현상: 이 버그 현상에 대해서 적어주세요.
 환경: 맥os / 윈도우
 원인: 이 버그 원인을 파악하고 원인을 적어주세요.
+분석: 
+  1. 현재 문제점 정확히 파악
+  2. 원인 상세 분석
+  3. 구체적인 해결책 제안 (코드 예시 포함)
+  4. 예상되는 문제점과 해결 방법
+  5. 테스트 방법
 해결책: 해결책을 적어주세요.
 사유: 버그가 재현되어 리젝되었습니다.
 ---
@@ -387,4 +395,679 @@ const result = await this.codeCrewTool.executeAgent({
 - Task Log: task_1759563588319_ad43hpw3o (executeAgent 테스트 성공)
 - Slack Bot 코드: src/slack/slack-bot.ts
 - MCP Tool: src/codecrew.tool.ts (queryAgent vs executeAgent)
+---
+
+### agents.yaml 문서 동적 로딩 기능 미작동
+ID: bug-00000007
+우선순위: 중간
+버전: 0.3.5
+상태: created
+작성자: CSO 프로젝트
+작업자: -
+생성일: 2025-10-04 00:00:00
+수정일: -
+현상:
+`agents.yaml`에서 `{{{documents.xxx.content}}}` Mustache 문법을 사용한 문서 동적 로딩이 작동하지 않음.
+에이전트 실행 시 문서 내용이 빈 문자열로 치환됨.
+
+테스트 케이스:
+```yaml
+documents:
+  - id: "codecrew-docs"
+    name: "CodeCrew 프로젝트 문서"
+    path: "./docs/codecrew.md"
+
+agents:
+  - id: "cso"
+    inline:
+      system_prompt: |
+        <business-documentation>
+        {{{documents.codecrew-docs.content}}}
+        </business-documentation>
+```
+
+실제 로그 증거:
+파일: `.codecrew/logs/task_1759570888659_7wb6rk8v3.log` (라인 120-123)
+```
+## 참고 문서
+<business-documentation>
+**CodeCrew 프로젝트:**
+
+
+**AI 비즈니스 전략:**
+
+</business-documentation>
+```
+✅ 기대 결과: 문서 내용이 포함되어야 함
+❌ 실제 결과: 빈 문자열
+
+환경: macOS / CodeCrew v0.3.5
+
+원인 (추정):
+1. 문서 파싱 로직 미구현 - {{{documents.xxx.content}}} 치환 로직이 없음
+2. 문서 로드 타이밍 이슈 - 에이전트 실행 시점에 문서를 읽지 않음
+3. Mustache 템플릿 엔진 설정 오류 - 템플릿 엔진이 설정되지 않았거나 문서 객체를 주입하지 않음
+
+해결책:
+**Option 1: 즉시 수정 (Quick Fix)** - 난이도: 쉬움 (1-2시간)
+system_prompt에 문서 내용을 직접 포함
+- 장점: 즉시 동작
+- 단점: 문서 수정 시마다 agents.yaml 전체 수정 필요, Google Docs 동기화 의미 상실
+
+**Option 2: 템플릿 엔진 구현 (Proper Fix)** ⭐ 권장 - 난이도: 중간 (4-8시간)
+codecrew CLI에 문서 로딩 로직 추가
+구현 위치: src/cli/agent-loader.ts, src/utils/template-renderer.ts
+구현 단계:
+1. Mustache 템플릿 엔진 추가 (`npm install mustache`)
+2. agents.yaml 파싱 시 documents 섹션 로드
+3. 각 에이전트의 system_prompt를 Mustache 렌더링
+4. 렌더링된 프롬프트를 AI에 전달
+
+필요 코드 예시:
+```typescript
+// scripts/load-agent.ts (가칭)
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
+import * as Mustache from 'mustache';
+
+interface Document {
+  id: string;
+  path: string;
+  content?: string;
+}
+
+function loadDocuments(config: any): Record<string, Document> {
+  const docs: Record<string, Document> = {};
+  for (const doc of config.documents || []) {
+    const content = fs.readFileSync(doc.path, 'utf-8');
+    docs[doc.id] = { ...doc, content };
+  }
+  return docs;
+}
+
+function renderAgentPrompt(agent: any, documents: Record<string, Document>): string {
+  const context = { documents };
+  return Mustache.render(agent.inline.system_prompt, context);
+}
+```
+
+영향도:
+- 기능적 영향:
+  ✅ 정상 작동: 에이전트는 system_prompt에 직접 작성된 내용으로 답변 생성 가능
+  ❌ 미작동: 외부 문서 파일을 참조한 동적 컨텍스트 제공 불가
+- 비즈니스 임팩트:
+  현재: system_prompt에 전략 정보를 하드코딩 → 문서 수정 시마다 YAML 수정 필요
+  기대: 문서 파일만 업데이트 → 에이전트가 자동으로 최신 정보 참조 → Google Docs 연동의 핵심 가치 실현
+
+우선순위 평가:
+- 비즈니스 임팩트: 3/5 (Google Docs 연동이 핵심 기능이나 우회 가능)
+- 기술적 긴급성: 3/5 (에이전트는 작동하나 유지보수 비용 증가)
+- 사용자 불편: 4/5 (문서 수정할 때마다 YAML 수정 필요)
+- 구현 난이도: 2/5 (템플릿 엔진은 표준 기술)
+총점: 12/20 → 권장 우선순위: **Medium (2주 내 수정)**
+
+테스트 케이스:
+Test 1: 단일 문서 로드
+```yaml
+documents:
+  - id: "test-doc"
+    path: "./test.md"
+agents:
+  - id: "test-agent"
+    inline:
+      system_prompt: "Content: {{{documents.test-doc.content}}}"
+```
+기대 결과: test.md 내용이 프롬프트에 포함
+
+Test 2: 다중 문서 로드
+```yaml
+documents:
+  - id: "doc1"
+    path: "./doc1.md"
+  - id: "doc2"
+    path: "./doc2.md"
+agents:
+  - id: "multi-agent"
+    inline:
+      system_prompt: |
+        Doc1: {{{documents.doc1.content}}}
+        Doc2: {{{documents.doc2.content}}}
+```
+기대 결과: 두 문서 내용 모두 포함
+
+Test 3: 존재하지 않는 문서
+```yaml
+documents: []
+agents:
+  - id: "error-agent"
+    inline:
+      system_prompt: "{{{documents.nonexistent.content}}}"
+```
+기대 결과: 명확한 에러 메시지 출력
+
+관련 파일:
+- agents.yaml - 에이전트 설정
+- .codecrew/logs/task_1759570888659_7wb6rk8v3.log - 버그 재현 로그
+- docs/codecrew.md - 참조되어야 하는 문서
+- docs/ai-business-ideas.md - 참조되어야 하는 문서
+
+참고문서: -
+---
+
+### Slack 메시지 2000자 제한 초과 시 에러
+ID: bug-00000008
+우선순위: 높음
+버전: 0.3.5
+상태: created
+작성자: dohapark
+작업자: -
+생성일: 2025-10-04
+수정일: -
+현상:
+Slack Bot 응답이 2000자를 초과하면 `invalid_blocks` 에러가 발생하며 사용자에게 에러 메시지만 표시됨.
+환경:
+macOS / Slack Bot / CodeCrew v0.3.5
+원인:
+Slack Block Kit의 텍스트 블록 길이 제한(3000자)을 초과하거나, 전체 메시지 구조가 Slack API 제한을 위반함.
+해결책:
+긴 응답을 여러 메시지로 분할하거나, 파일 업로드 방식으로 전환 필요.
+참고문서: -
+---
+
+### Slack Bot executeAgent 응답에 불필요한 메타데이터 표시
+ID: bug-00000009
+우선순위: 높음
+버전: 0.3.7
+상태: resolved
+작성자: dohapark
+작업자: dohapark
+생성일: 2025-10-04 20:14:00
+수정일: 2025-10-04 21:28:00
+현상:
+Slack Bot에서 `executeAgent`를 사용할 때 응답에 불필요한 메타데이터가 모두 표시됨.
+간단한 질문("hi")에도 장황한 응답이 나옴:
+
+**표시되는 불필요한 정보:**
+- "⚡ **Agent Execution Response**"
+- "**Task ID:** task_xxx"
+- "**Agent:** cso (claude)"
+- "**Working Directory:** Default for cso"
+- "**Implementation Guidance:**" 헤더
+- "**Context:** Previous conversation..." (이전 대화 전체 포함)
+- "Use getTaskLogs with taskId..." 안내
+- "**⚠️ Important Recommendations:**" (3개 항목)
+
+**기대 동작:**
+Slack에서는 AI의 실제 답변만 깔끔하게 표시되어야 함.
+메타데이터는 헤더 블록과 완료 메시지에만:
+- 헤더: `🤖 cso`
+- 완료 메시지: `✅ Completed! (@cso)`
+- 본문: AI의 실제 답변만
+
+환경: macOS / Slack Bot / CodeCrew v0.3.7
+
+원인:
+`src/codecrew.tool.ts`의 `executeAgent` 메서드(line 669-688)에서 응답 포맷팅 시 모든 메타데이터를 포함:
+
+```typescript
+const responseText = `⚡ **Agent Execution Response**
+**Task ID:** ${taskId}
+**Agent:** ${agentId} (${response.provider})
+...
+**Implementation Guidance:**
+${response.success ? response.content : ...}
+${context ? `**Context:** ${context}` : ''}
+...
+`;
+```
+
+이 `responseText`가 `content[0].text`에 저장되고, Slack Bot이 이를 그대로 표시함.
+
+해결책:
+**Option 1: executeAgent 응답에 rawResponse 필드 추가** (추천)
+```typescript
+return {
+  content: [{ type: 'text', text: responseText }], // MCP/CLI용
+  rawResponse: response.content, // Slack용 (AI 답변만)
+  taskId, success, agent, ...
+};
+```
+
+Slack Bot에서 `result.rawResponse` 사용:
+```typescript
+const responseText = (result as any).rawResponse || 
+  (result as any).implementation || ...;
+```
+
+**Option 2: Slack Bot에서 정규식 파싱** (임시)
+- "Implementation Guidance:" 이후 섹션만 추출
+- 단점: 포맷 변경 시 깨짐
+
+영향도:
+- 사용자 경험: 높음 (모든 메시지에 영향)
+- 토큰 사용: 높음 (불필요한 메타데이터)
+- 가독성: 심각 (간단한 질문도 장황)
+
+우선순위: 높음
+
+테스트 케이스:
+Test 1: 간단한 질문 - "hi"
+기대: "안녕하세요! 무엇을 도와드릴까요?"
+실제: 8줄 메타데이터 + 답변
+
+Test 2: 스레드 답글 - "요약해줘"
+기대: 요약 내용만
+실제: 메타데이터 + 이전 대화 전체 + 요약
+
+관련 파일:
+- src/codecrew.tool.ts (Line 669-688)
+- src/slack/slack-bot.ts (Line 194-202)
+
+참고 로그: .codecrew/logs/task_1759576448661_7j2xohnol.log
+
+해결 방법:
+executeAgent 응답에 'implementation' 필드 추가하여 순수 AI 응답만 추출.
+Slack Bot에서 'implementation' 필드 우선 사용하도록 수정.
+
+커밋: 4b70dd7 - fix(slack): Remove unnecessary metadata from executeAgent responses (bug-00000009)
+
+참고문서: -
+---
+
+### Slack 대화 히스토리에서 Assistant 답변 내용 누락
+ID: bug-00000010
+우선순위: 긴급
+버전: 0.3.7
+상태: created
+작성자: dohapark
+작업자: -
+생성일: 2025-10-04 20:42:00
+수정일: -
+현상:
+Slack Bot의 대화 히스토리에서 Assistant의 실제 답변 내용이 누락되고 "✅ Completed!" 메시지만 표시됨.
+AI가 이전 대화를 참조할 때 내용을 알 수 없음.
+
+**로그 증거 (task_1759578041374_044cus1no.log):**
+```
+Additional Context: Previous conversation in this Slack thread:
+User: @user 오늘 날씨 알려줘
+Assistant: ✅ Completed!          ← 실제 답변 내용이 없음
+User: @user 첫번째 응답 뭐라고 왔지?
+Assistant: ✅ Completed!          ← 실제 답변 내용이 없음
+User: @user 첫번째 응답에 대답한건 누구지?
+Assistant: ✅ Completed!          ← 실제 답변 내용이 없음
+```
+
+**기대 결과:**
+```
+User: @user 오늘 날씨 알려줘
+Assistant (@cso): 죄송하지만 저는 CSO로서 날씨 정보는...
+User: @user 첫번째 응답 뭐라고 왔지?
+Assistant (@codecrew_dev): 첫번째 응답은 "오늘 날씨 알려줘"였습니다.
+```
+
+환경: macOS / Slack Bot / CodeCrew v0.3.7
+
+원인:
+`src/conversation/slack-conversation-history.provider.ts` (line 77)에서 메시지 텍스트 추출 시 `msg.text` 필드만 사용:
+
+```typescript
+text: this.sanitizeMessage(this.cleanSlackText(msg.text || '')),
+```
+
+**Slack 메시지 구조:**
+- `text`: "✅ Completed! (@agent_id)" (간단한 텍스트)
+- `blocks`: 실제 AI 답변이 포함된 구조화된 블록
+
+Bot 메시지의 실제 내용은 `blocks[].text.text`에 있으나, 현재 코드는 `text` 필드만 읽어서 "Completed!" 메시지만 가져옴.
+
+해결책:
+**Bot 메시지의 경우 blocks에서 내용 추출:**
+
+```typescript
+// bot 메시지인 경우 blocks에서 실제 답변 추출
+const extractMessageContent = (msg: any): string => {
+  if (msg.bot_id && msg.blocks && Array.isArray(msg.blocks)) {
+    // header 블록 제외하고 section 블록들만 추출
+    const sections = msg.blocks
+      .filter((b: any) => b.type === 'section' && b.text?.text)
+      .map((b: any) => b.text.text);
+    
+    if (sections.length > 0) {
+      return this.cleanSlackText(sections.join('\n\n'));
+    }
+  }
+  
+  // fallback: text 필드 사용
+  return this.cleanSlackText(msg.text || '');
+};
+
+const messages = result.messages.map((msg: any) => ({
+  ...
+  text: this.sanitizeMessage(extractMessageContent(msg)),
+  ...
+}));
+```
+
+영향도:
+- 대화 연속성: 치명적 (이전 답변 내용을 모름)
+- 멀티턴 대화: 불가능 (컨텍스트 손실)
+- 에이전트 협업: 불가능 (다른 에이전트 답변 못 봄)
+
+우선순위: 긴급
+- 대화 히스토리의 핵심 기능
+- 멀티턴 대화 완전히 깨짐
+- 에이전트 구분 기능도 무의미
+
+관련 파일:
+- src/conversation/slack-conversation-history.provider.ts (Line 77)
+- src/slack/slack-bot.ts (메시지 전송 시 blocks 사용)
+
+참고 로그: .codecrew/logs/task_1759578041374_044cus1no.log
+
+참고문서: -
+---
+
+### Slack Bot 큰 메시지 에러 (invalid_blocks)
+ID: bug-00000011
+우선순위: 높음
+버전: 0.3.7
+상태: created
+작성자: dohapark
+작업자: -
+생성일: 2025-10-04 20:42:00
+수정일: -
+현상:
+AI 응답이 길 경우 Slack API 에러 발생:
+```
+❌ Error: An API error occurred: invalid_blocks
+```
+
+사용자에게 에러 메시지만 표시되고 실제 AI 답변을 볼 수 없음.
+
+환경: macOS / Slack Bot / CodeCrew v0.3.7
+
+원인:
+Slack Block Kit API 제한:
+- 단일 section block: 최대 3000자
+- 전체 blocks 배열: 최대 50개 블록
+- 전체 메시지: 최대 40,000자
+
+**현재 코드 (message.formatter.ts line 38-46):**
+```typescript
+blocks.push({
+  type: 'section',
+  text: {
+    type: 'mrkdwn',
+    text: response,  // ← 3000자 초과 시 에러
+  },
+});
+```
+
+`splitIntoSections()` 메서드는 존재하나 사용되지 않음.
+
+해결책:
+**Option 1: splitIntoSections 사용** (임시 해결)
+```typescript
+const sections = this.splitIntoSections(response, 2900);
+sections.forEach(sectionText => {
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: sectionText },
+  });
+});
+```
+
+**Option 2: 멀티턴 응답** (추천)
+큰 응답을 여러 메시지로 분할:
+```typescript
+async sendLargeResponse(say: Function, response: string, threadTs: string) {
+  const chunks = this.splitIntoChunks(response, 10000); // 10KB per message
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const blocks = this.formatChunk(chunks[i], i + 1, chunks.length);
+    await say({
+      text: `Part ${i + 1}/${chunks.length}`,
+      blocks: blocks,
+      thread_ts: threadTs,
+    });
+    
+    // Rate limit: 1 message per second
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+}
+```
+
+**Option 3: 파일 업로드** (대용량)
+40KB 초과 시 텍스트 파일로 업로드:
+```typescript
+if (response.length > 40000) {
+  await client.files.upload({
+    channels: channel,
+    thread_ts: threadTs,
+    content: response,
+    filename: `response_${taskId}.txt`,
+    title: 'AI Response (텍스트 파일)',
+  });
+}
+```
+
+영향도:
+- 사용자 경험: 높음 (긴 답변 못 봄)
+- 발생 빈도: 중간 (복잡한 질문 시)
+- 데이터 손실: 있음 (에러 시 답변 유실)
+
+우선순위: 높음
+- 긴 답변이 필요한 질문에 답변 불가
+- 에러 메시지만 표시되어 혼란
+
+테스트 케이스:
+```
+Test 1: 3000자 초과 단일 응답
+@codecrew "CodeCrew 아키텍처를 상세히 설명해줘 (5000자 이상)"
+기대: 멀티턴 또는 분할된 블록으로 표시
+실제: invalid_blocks 에러
+
+Test 2: 매우 긴 응답 (10000자+)
+@codecrew "모든 버그 리스트를 상세히 설명해줘"
+기대: 여러 메시지로 분할 또는 파일 업로드
+실제: invalid_blocks 에러
+```
+
+관련 파일:
+- src/slack/formatters/message.formatter.ts (Line 38-46: 블록 생성)
+- src/slack/formatters/message.formatter.ts (Line 113-150: splitIntoSections 메서드)
+- src/slack/slack-bot.ts (메시지 전송)
+
+참고문서:
+- Slack Block Kit 제한: https://api.slack.com/reference/block-kit/blocks
+
+참고: bug-00000008 (유사 문제)
+
+해결책 상세:
+
+**✅ 선택된 옵션: Option 1 (splitIntoSections) 우선 적용 + Option 2 (멀티턴) 대비**
+
+**선택 이유:**
+1. **즉시 효과**: 기존 splitIntoSections() 메서드를 활용하여 1시간 내 구현 가능
+2. **점진적 개선**: Option 1로 3000자 제한 해결 → 향후 Option 2로 확장
+3. **최소 변경**: message.formatter.ts만 수정하면 되어 사이드 이펙트 최소화
+4. **테스트 용이**: 단일 메시지 방식이라 히스토리 저장 등 기존 로직과 호환
+
+**즉시 구현 (Option 1 - splitIntoSections 적용):**
+
+```typescript
+// src/slack/formatters/message.formatter.ts
+// Line 31-46 수정
+
+formatExecutionResult(result: ExecutionResult): (Block | KnownBlock)[] {
+  const blocks: (Block | KnownBlock)[] = [];
+
+  if (result.success) {
+    const response = this.truncateForSlack(result.response, this.maxResponseLength);
+
+    // ✅ 3000자 제한 대응: splitIntoSections 사용
+    if (response.length > 2900) {
+      // 2900자로 분할 (안전 마진 100자)
+      const sections = this.splitIntoSections(response, 2900);
+      
+      sections.forEach((sectionText, index) => {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: sectionText,
+          },
+        });
+        
+        // 선택적: 섹션 구분선 (가독성 향상)
+        if (index < sections.length - 1) {
+          blocks.push({ type: 'divider' });
+        }
+      });
+    } else {
+      // 짧은 응답은 단일 블록 유지
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: response,
+        },
+      });
+    }
+  } else {
+    // 에러 처리는 기존 로직 유지
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `❌ *Error*\n\`\`\`${result.error || 'Unknown error'}\`\`\``,
+      },
+    });
+
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `Agent: *${result.agent}* (${result.provider}) · Task ID: \`${result.taskId}\``,
+      }],
+    });
+  }
+
+  return blocks;
+}
+```
+
+**블록 개수 제한 검증 (50개 블록 제한 대응):**
+
+```typescript
+// src/slack/formatters/message.formatter.ts
+// splitIntoSections 호출 전 검증 로직 추가
+
+private validateBlockCount(response: string, maxCharsPerSection: number): number {
+  const estimatedBlocks = Math.ceil(response.length / maxCharsPerSection);
+  const MAX_BLOCKS = 48; // 50개 제한에서 헤더/footer 여유분 고려
+  
+  if (estimatedBlocks > MAX_BLOCKS) {
+    // 블록 개수 초과 시 섹션 크기 확대
+    return Math.ceil(response.length / MAX_BLOCKS);
+  }
+  
+  return maxCharsPerSection;
+}
+
+// formatExecutionResult에서 사용
+const adjustedMaxChars = this.validateBlockCount(response, 2900);
+const sections = this.splitIntoSections(response, adjustedMaxChars);
+```
+
+**Option 2 (멀티턴 응답) 향후 구현 가이드:**
+
+멀티턴이 필요한 시나리오:
+- 40KB 초과 메시지 (50개 블록으로도 부족)
+- 실시간 스트리밍 효과 원할 때
+- 긴 코드 생성 작업
+
+구현 위치: `src/slack/slack-bot.ts`에 `sendMultiTurnResponse()` 메서드 추가
+
+```typescript
+// 향후 구현 예시 (참고용)
+private async sendLargeResponse(
+  say: any,
+  response: string,
+  threadTs: string,
+  agentId: string,
+) {
+  const CHUNK_SIZE = 8000; // 8KB per message
+  const chunks = this.splitIntoChunks(response, CHUNK_SIZE);
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const blocks = this.formatter.formatExecutionResult({
+      agent: agentId,
+      response: chunks[i],
+      success: true,
+      taskId: 'multi-turn',
+      provider: agentId,
+    });
+    
+    await say({
+      text: `Part ${i + 1}/${chunks.length} (@${agentId})`,
+      blocks: blocks,
+      thread_ts: threadTs,
+    });
+    
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+}
+```
+
+**예상 문제점과 해결:**
+
+1. **마크다운 파싱 깨짐**
+   - 문제: 코드 블록이 섹션 경계에서 잘림
+   - 해결: splitIntoSections()의 breakPoint 로직이 이미 처리 (줄바꿈 단위 분할)
+
+2. **divider 블록 추가로 50개 제한 근접**
+   - 문제: divider를 넣으면 블록 개수 2배
+   - 해결: divider는 선택적으로만 사용 (10개 이상 섹션일 때는 생략)
+
+3. **SLACK_MAX_RESPONSE_LENGTH 환경변수 충돌**
+   - 문제: truncateForSlack이 먼저 실행되어 이미 잘림
+   - 해결: maxResponseLength를 40000으로 설정하여 truncate 회피
+
+**테스트 방법:**
+
+```bash
+# Test 1: 3000자 초과 응답 (splitIntoSections 테스트)
+@codecrew "bug.md의 bug-00000010 섹션을 읽고 상세히 설명해줘"
+# 기대: 여러 section 블록으로 분할 표시 ✅
+# 검증: invalid_blocks 에러 없음 ✅
+
+# Test 2: 매우 긴 응답 (블록 개수 제한 테스트)  
+@codecrew "모든 버그 리스트를 상세히 설명해줘 (각 버그마다 원인, 해결책, 코드 예시 포함)"
+# 기대: 블록 개수 조정으로 정상 표시 ✅
+# 검증: 50개 블록 제한 미초과 확인
+
+# Test 3: 코드 블록 포함 응답 (마크다운 파싱 테스트)
+@codecrew "TypeScript로 Slack Bot 예제 3개 작성해줘 (각 100줄)"
+# 기대: 코드 블록이 깨지지 않고 표시 ✅
+# 검증: ```이 섹션 경계에서 안 잘림
+```
+
+**구현 우선순위:**
+1. ✅ **즉시 적용** (1시간): formatExecutionResult 수정 (splitIntoSections 활용)
+2. 🔄 **검증** (30분): validateBlockCount 로직 추가
+3. 📋 **향후** (3시간): Option 2 멀티턴 응답 구현 (필요 시)
+
+**검증 체크리스트:**
+- [ ] 3000자 초과 응답 정상 표시
+- [ ] invalid_blocks 에러 발생 안 함
+- [ ] 블록 개수 50개 미초과
+- [ ] 코드 블록 및 마크다운 정상 렌더링
+- [ ] 기존 짧은 응답 동작 유지
+- [ ] 에러 응답 로직 정상 작동
 ---
