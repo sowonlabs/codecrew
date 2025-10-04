@@ -517,8 +517,23 @@ export class ToolCallService {
               }
 
               try {
-                const sectionContent = await DocumentManager.selectSection(content, heading);
-                if (sectionContent) {
+                // Use regex to find heading and extract content until next same-level or higher-level heading
+                const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const headingRegex = new RegExp(`^(#{1,6})\\s+${escapeRegex(heading)}\\s*$`, 'm');
+                const match = content.match(headingRegex);
+
+                if (match && match.index !== undefined && match[1]) {
+                  const startIndex = match.index;
+                  const headingLevel = match[1].length;
+
+                  // Find next heading of same or higher level
+                  const nextHeadingRegex = new RegExp(`^#{1,${headingLevel}}\\s+`, 'gm');
+                  nextHeadingRegex.lastIndex = startIndex + match[0].length;
+                  const nextMatch = nextHeadingRegex.exec(content);
+
+                  const endIndex = nextMatch ? nextMatch.index : content.length;
+                  const sectionContent = content.substring(startIndex, endIndex).trim();
+
                   sections.push({
                     heading,
                     content: sectionContent,
