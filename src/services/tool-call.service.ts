@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { readFileSync } from 'fs';
+import { readFileSync, statSync } from 'fs';
 import { AgentLoaderService } from './agent-loader.service';
+import { DocumentManager } from '../knowledge/DocumentManager';
 
 /**
  * Tool definition interface compatible with Mastra framework
@@ -305,7 +306,120 @@ export class ToolCallService {
       }
     );
 
-    this.logger.log('Built-in tools registered: hello, read_file, list_agents');
+    // Get markdown headings tool
+    this.register(
+      {
+        name: 'get_markdown_headings',
+        description: 'Extract table of contents (headings) from a markdown file. Use this tool to efficiently understand the structure of large markdown files without reading the entire content.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'The path to the markdown file',
+            },
+            maxDepth: {
+              type: 'number',
+              description: 'Maximum heading depth to include (1-6, default: 3)',
+            },
+          },
+          required: ['path'],
+        },
+        output_schema: {
+          type: 'object',
+          properties: {
+            headings: {
+              type: 'array',
+              description: 'Array of heading objects with depth and text',
+              items: {
+                type: 'object',
+                properties: {
+                  depth: { type: 'number', description: 'Heading depth (1-6)' },
+                  text: { type: 'string', description: 'Heading text' },
+                },
+              },
+            },
+            toc: {
+              type: 'string',
+              description: 'Table of contents as markdown string',
+            },
+            fileSize: {
+              type: 'number',
+              description: 'File size in bytes',
+            },
+          },
+          required: ['headings', 'toc', 'fileSize'],
+        },
+      },
+      {
+        execute: async (context: ToolExecutionContext): Promise<ToolExecutionResult> => {
+          const startTime = Date.now();
+          try {
+            const { path, maxDepth = 3 } = context.input;
+
+            if (!path || typeof path !== 'string') {
+              return {
+                success: false,
+                error: 'Invalid input: path is required and must be a string',
+                metadata: {
+                  executionTime: Date.now() - startTime,
+                  toolName: 'get_markdown_headings',
+                  runId: context.runId,
+                },
+              };
+            }
+
+            // Validate maxDepth
+            const depth = typeof maxDepth === 'number' ? Math.min(Math.max(maxDepth, 1), 6) : 3;
+
+            // Read file and get stats
+            const content = readFileSync(path, 'utf-8');
+            const stats = statSync(path);
+
+            // Extract TOC using DocumentManager
+            const tocMarkdown = await DocumentManager.extractToc(content, depth);
+
+            // Parse TOC into structured headings array
+            const headings = tocMarkdown.split('\n').filter(line => line.trim()).map(line => {
+              const match = line.match(/^(#{1,6})\s+(.+)$/);
+              if (match && match[1] && match[2]) {
+                return {
+                  depth: match[1].length,
+                  text: match[2].trim(),
+                };
+              }
+              return null;
+            }).filter((h): h is { depth: number; text: string } => h !== null);
+
+            return {
+              success: true,
+              data: {
+                headings,
+                toc: tocMarkdown,
+                fileSize: stats.size,
+              },
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'get_markdown_headings',
+                runId: context.runId,
+              },
+            };
+          } catch (error: any) {
+            return {
+              success: false,
+              error: `Failed to extract markdown headings: ${error.message}`,
+              metadata: {
+                executionTime: Date.now() - startTime,
+                toolName: 'get_markdown_headings',
+                runId: context.runId,
+              },
+            };
+          }
+        },
+      }
+    );
+
+    this.logger.log('Built-in tools registered: hello, read_file, list_agents, get_markdown_headings');
   }
 
   /**
