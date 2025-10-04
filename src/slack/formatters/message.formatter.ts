@@ -35,13 +35,35 @@ export class SlackMessageFormatter {
       // Success: Show only the response content (clean!)
       const response = this.truncateForSlack(result.response, this.maxResponseLength);
 
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: response,
-        },
-      });
+      // Handle large messages: split into multiple sections if needed
+      if (response.length > 2900) {
+        const adjustedMaxChars = this.validateBlockCount(response, 2900);
+        const sections = this.splitIntoSections(response, adjustedMaxChars);
+
+        sections.forEach((sectionText, index) => {
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: sectionText,
+            },
+          });
+
+          // Add divider only for smaller section counts to avoid hitting 50 block limit
+          if (index < sections.length - 1 && sections.length < 10) {
+            blocks.push({ type: 'divider' });
+          }
+        });
+      } else {
+        // Short responses use a single block
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: response,
+          },
+        });
+      }
     } else {
       // Error: Show error message with metadata
       blocks.push({
@@ -125,5 +147,68 @@ export class SlackMessageFormatter {
         },
       },
     ];
+  }
+
+  /**
+   * Validate and adjust section size to stay within 50 block limit
+   */
+  private validateBlockCount(response: string, maxCharsPerSection: number): number {
+    const estimatedBlocks = Math.ceil(response.length / maxCharsPerSection);
+    const MAX_BLOCKS = 48; // 50 block limit with margin for header/footer
+
+    if (estimatedBlocks > MAX_BLOCKS) {
+      // Increase section size to fit within block limit
+      return Math.ceil(response.length / MAX_BLOCKS);
+    }
+
+    return maxCharsPerSection;
+  }
+
+  /**
+   * Split text into sections that fit within Slack's 3000 char limit
+   * Breaks at newlines to preserve markdown formatting
+   */
+  private splitIntoSections(text: string, maxLength: number): string[] {
+    if (!text || text.length <= maxLength) {
+      return [text];
+    }
+
+    const sections: string[] = [];
+    let currentSection = '';
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+      const lineWithNewline = line + '\n';
+
+      // If adding this line would exceed the limit
+      if (currentSection.length + lineWithNewline.length > maxLength) {
+        // If current section is not empty, save it
+        if (currentSection) {
+          sections.push(currentSection.trimEnd());
+          currentSection = '';
+        }
+
+        // If a single line is longer than maxLength, split it
+        if (lineWithNewline.length > maxLength) {
+          let remainingLine = lineWithNewline;
+          while (remainingLine.length > maxLength) {
+            sections.push(remainingLine.substring(0, maxLength));
+            remainingLine = remainingLine.substring(maxLength);
+          }
+          currentSection = remainingLine;
+        } else {
+          currentSection = lineWithNewline;
+        }
+      } else {
+        currentSection += lineWithNewline;
+      }
+    }
+
+    // Add the last section if not empty
+    if (currentSection) {
+      sections.push(currentSection.trimEnd());
+    }
+
+    return sections;
   }
 }
