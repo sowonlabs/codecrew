@@ -12,7 +12,7 @@
 이 디렉토리에 수정작업을 진행하고 테스터와 협업을 통해 테스트가 완료가 되면 작업내용을 커밋을 한 후에 상태를 resolved로 변경합니다. 그리고 작업자를 dohapark으로 변경 해 주세요. (사람 개발자가 확인 후에 closed가 됩니다. 확인후 현상 재현시 rejected가 됨. 작업자는 rejected 된 이슈를 확인하세요.)
 상세하게 기술할 문서 작성이 필요한 경우 doc에 bug ID로 md 파일을 작성해 주세요.
 
-## bugs (Total:7, Created:5, Resolved:2)
+## bugs (Total:7, Created:4, Resolved:2, Closed:1)
 ### 병렬처리 버그
 ID: bug-00000000
 우선순위: 긴급
@@ -219,11 +219,12 @@ ls -la .codecrew/conversations/
 ID: bug-00000006
 우선순위: 긴급
 버전: 0.3.5
-상태: resolved
+상태: closed
 작성자: GitHub Copilot
 작업자: dohapark
 생성일: 2025-10-04 16:45:00
 수정일: 2025-10-04 17:30:00
+종료일: 2025-10-04 17:55:00
 현상:
 Slack Bot에서 에이전트가 파일을 수정할 수 없음.
 CLI에서는 `execute` 명령어로 파일 수정이 가능하지만, Slack에서는 불가능함.
